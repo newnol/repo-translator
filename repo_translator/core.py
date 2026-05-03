@@ -312,7 +312,7 @@ class RepoTranslator:
         """
         Translate source code line-by-line.
         Only translates lines containing CJK characters (comments, strings, docstrings).
-        Preserves code structure.
+        Preserves code structure and indentation.
         """
         translated_lines = []
         batch_to_translate = []
