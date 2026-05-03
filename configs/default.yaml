@@ -1,0 +1,59 @@
+# repo-translator default configuration
+
+source_lang: zh
+target_lang: en
+translator: google        # google, google-alt, deepl, openai, ollama
+review_with: null         # openai, anthropic, ollama (null = skip review)
+review_sample_rate: 0.15  # review 15% of translated files
+
+# File patterns to include
+include:
+  - "*.md"
+  - "*.py"
+  - "*.rs"
+  - "*.js"
+  - "*.ts"
+  - "*.jsx"
+  - "*.tsx"
+  - "*.go"
+  - "*.java"
+  - "*.html"
+  - "*.vue"
+  - "*.json"
+  - "*.yaml"
+  - "*.yml"
+  - "*.toml"
+  - "*.txt"
+  - "*.rst"
+  - "*.css"
+  - "*.scss"
+  - "*.sh"
+  - "*.proto"
+
+# Patterns to exclude
+exclude:
+  - "node_modules/**"
+  - ".git/**"
+  - "__pycache__/**"
+  - "target/**"
+  - "build/**"
+  - "dist/**"
+  - "vendor/**"
+  - "venv/**"
+  - "*.min.js"
+  - "*.min.css"
+  - "*.lock"
+  - "package-lock.json"
+  - "*.png"
+  - "*.jpg"
+  - "*.pdf"
+  - "*.woff2"
+
+# Translation settings
+batch_size: 40
+max_chars_per_request: 5000
+retry_attempts: 3
+retry_delay: 2
+
+# GitHub settings (or set GITHUB_TOKEN env var)
+github_token: null
