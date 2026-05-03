@@ -317,12 +317,16 @@ class RepoTranslator:
         translated_lines = []
         batch_to_translate = []
         batch_indices = []
+        batch_indents = []
 
-        # Collect lines that need translation
+        # Collect lines that need translation, preserving indentation
         for i, line in enumerate(lines):
             if has_cjk(line) and len(line.strip()) > 2:
-                batch_to_translate.append(line)
+                batch_to_translate.append(line.strip())
                 batch_indices.append(i)
+                # Save original indentation
+                indent = len(line) - len(line.lstrip())
+                batch_indents.append(indent)
             translated_lines.append(line)
 
         if not batch_to_translate:
@@ -333,6 +337,7 @@ class RepoTranslator:
         for chunk_start in range(0, len(batch_to_translate), chunk_size):
             chunk = batch_to_translate[chunk_start:chunk_start + chunk_size]
             chunk_idx = batch_indices[chunk_start:chunk_start + chunk_size]
+            chunk_indent = batch_indents[chunk_start:chunk_start + chunk_size]
 
             # Join with separator for context
             joined = '\n|||SEP|||\n'.join(chunk)
@@ -340,10 +345,11 @@ class RepoTranslator:
                 translated = self.translator.translate_text(joined)
                 parts = translated.split('|||SEP|||')
 
-                for idx, part in zip(chunk_idx, parts):
+                for idx, part, indent in zip(chunk_idx, parts, chunk_indent):
                     cleaned = part.strip()
                     if cleaned:
-                        translated_lines[idx] = cleaned
+                        # Restore original indentation
+                        translated_lines[idx] = ' ' * indent + cleaned
             except Exception as e:
                 logger.warning(f"Line translation failed: {e}")
                 # Keep original lines on failure

@@ -20,6 +20,10 @@ TRANSLATABLE_EXTENSIONS = {
     '.properties', '.env',
     # Other
     '.xml', '.svg', '.proto', '.graphql', '.gql',
+    # Qt / UI
+    '.ui', '.qml',
+    # Localization
+    '.po', '.pot', '.mo',
 }
 
 # Extensions to NEVER translate (binary / compiled)

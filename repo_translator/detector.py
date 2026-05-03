@@ -115,8 +115,8 @@ def extract_translatable_text(content: str, suffix: str) -> str:
             lines.append(stripped)
             continue
 
-        # HTML: extract text between tags
-        if suffix in ('.html', '.htm', '.jinja2', '.vue', '.jsx', '.tsx'):
+        # HTML/XML: extract text between tags
+        if suffix in ('.html', '.htm', '.jinja2', '.vue', '.jsx', '.tsx', '.ui', '.qml', '.xml'):
             text = re.sub(r'<[^>]+>', ' ', stripped)
             if text.strip():
                 lines.append(text.strip())
