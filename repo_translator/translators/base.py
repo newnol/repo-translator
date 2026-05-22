@@ -1,7 +1,7 @@
 """Base translator interface."""
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List
 
 
 class BaseTranslator(ABC):
@@ -33,8 +33,8 @@ class BaseTranslator(ABC):
 
     def _is_mostly_code(self, text: str) -> bool:
         """Check if text is mostly code (skip translation)."""
-        code_indicators = ['{', '}', '()', '=>', ';;', 'import ', 'def ', 'fn ', 'func ']
-        lines = text.strip().split('\n')
+        code_indicators = ["{", "}", "()", "=>", ";;", "import ", "def ", "fn ", "func "]
+        lines = text.strip().split("\n")
         code_lines = sum(1 for line in lines if any(ind in line for ind in code_indicators))
         return len(lines) > 3 and code_lines / len(lines) > 0.7
 
@@ -47,15 +47,15 @@ class BaseTranslator(ABC):
         current = []
         current_len = 0
 
-        for line in text.split('\n'):
+        for line in text.split("\n"):
             if current_len + len(line) + 1 > max_chars and current:
-                chunks.append('\n'.join(current))
+                chunks.append("\n".join(current))
                 current = []
                 current_len = 0
             current.append(line)
             current_len += len(line) + 1
 
         if current:
-            chunks.append('\n'.join(current))
+            chunks.append("\n".join(current))
 
         return chunks

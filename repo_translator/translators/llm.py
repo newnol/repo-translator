@@ -2,9 +2,7 @@
 
 import os
 import time
-import json
 import logging
-from typing import List, Optional
 
 from .base import BaseTranslator
 
@@ -24,15 +22,13 @@ class LLMTranslator(BaseTranslator):
         temperature: float = 0.3,
     ):
         super().__init__(source_lang, target_lang)
-        self.api_key = api_key or os.environ.get('OPENAI_API_KEY', '')
-        self.base_url = base_url.rstrip('/')
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self.base_url = base_url.rstrip("/")
         self.model = model
         self.temperature = temperature
 
         if not self.api_key:
-            raise ValueError(
-                "API key required. Set OPENAI_API_KEY env var or pass api_key."
-            )
+            raise ValueError("API key required. Set OPENAI_API_KEY env var or pass api_key.")
 
     @property
     def name(self) -> str:
@@ -81,7 +77,10 @@ TEXT TO TRANSLATE:
                     json={
                         "model": self.model,
                         "messages": [
-                            {"role": "system", "content": "You are a professional translator. Output only the translated text."},
+                            {
+                                "role": "system",
+                                "content": "You are a professional translator. Output only the translated text.",
+                            },
                             {"role": "user", "content": self._build_prompt(chunk)},
                         ],
                         "temperature": self.temperature,
@@ -91,14 +90,14 @@ TEXT TO TRANSLATE:
                 )
                 resp.raise_for_status()
                 result = resp.json()
-                translated_chunks.append(result['choices'][0]['message']['content'])
+                translated_chunks.append(result["choices"][0]["message"]["content"])
             except Exception as e:
                 logger.warning(f"LLM translation failed: {e}")
                 translated_chunks.append(chunk)
 
             time.sleep(0.5)
 
-        return '\n'.join(translated_chunks)
+        return "\n".join(translated_chunks)
 
 
 class OllamaTranslator(BaseTranslator):
@@ -113,7 +112,7 @@ class OllamaTranslator(BaseTranslator):
     ):
         super().__init__(source_lang, target_lang)
         self.model = model
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
 
     @property
     def name(self) -> str:
@@ -146,7 +145,7 @@ class OllamaTranslator(BaseTranslator):
                 timeout=120,
             )
             resp.raise_for_status()
-            return resp.json().get('response', text)
+            return resp.json().get("response", text)
         except Exception as e:
             logger.warning(f"Ollama translation failed: {e}")
             return text

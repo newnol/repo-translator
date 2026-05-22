@@ -2,7 +2,12 @@
 
 import pytest
 
-from repo_translator.detector import detect_language, has_cjk, count_cjk_chars, extract_translatable_text
+from repo_translator.detector import (
+    detect_language,
+    has_cjk,
+    count_cjk_chars,
+    extract_translatable_text,
+)
 from repo_translator.file_filter import should_translate, TRANSLATABLE_EXTENSIONS
 
 
@@ -26,12 +31,12 @@ class TestDetector:
     def test_detect_language_chinese(self):
         text = "这是一段中文文本，用于测试语言检测功能。我们希望它能够正确识别中文。"
         lang = detect_language(text)
-        assert lang in ('zh-cn', 'zh', 'zh-tw')
+        assert lang in ("zh-cn", "zh", "zh-tw")
 
     def test_detect_language_english(self):
         text = "This is a sample English text for testing language detection functionality."
         lang = detect_language(text)
-        assert lang == 'en'
+        assert lang == "en"
 
     def test_detect_language_empty(self):
         assert detect_language("") is None
@@ -46,10 +51,10 @@ class TestFileFilter:
     """Test file filtering."""
 
     def test_translatable_extensions(self):
-        assert '.md' in TRANSLATABLE_EXTENSIONS
-        assert '.py' in TRANSLATABLE_EXTENSIONS
-        assert '.rs' in TRANSLATABLE_EXTENSIONS
-        assert '.png' not in TRANSLATABLE_EXTENSIONS
+        assert ".md" in TRANSLATABLE_EXTENSIONS
+        assert ".py" in TRANSLATABLE_EXTENSIONS
+        assert ".rs" in TRANSLATABLE_EXTENSIONS
+        assert ".png" not in TRANSLATABLE_EXTENSIONS
 
     def test_should_translate_markdown(self, tmp_path):
         md_file = tmp_path / "README.md"
@@ -58,7 +63,7 @@ class TestFileFilter:
 
     def test_should_skip_binary(self, tmp_path):
         png_file = tmp_path / "image.png"
-        png_file.write_bytes(b'\x89PNG')
+        png_file.write_bytes(b"\x89PNG")
         assert should_translate(png_file, tmp_path) is False
 
     def test_should_skip_node_modules(self, tmp_path):
@@ -78,17 +83,17 @@ class TestExtractText:
 
     def test_extract_markdown(self):
         content = "# Hello World\n\nThis is a paragraph."
-        result = extract_translatable_text(content, '.md')
+        result = extract_translatable_text(content, ".md")
         assert "Hello World" in result
 
     def test_extract_python_comments(self):
-        content = '# This is a comment\ndef hello():\n    pass'
-        result = extract_translatable_text(content, '.py')
+        content = "# This is a comment\ndef hello():\n    pass"
+        result = extract_translatable_text(content, ".py")
         assert "This is a comment" in result
 
     def test_extract_html(self):
-        content = '<h1>Hello</h1><p>World</p>'
-        result = extract_translatable_text(content, '.html')
+        content = "<h1>Hello</h1><p>World</p>"
+        result = extract_translatable_text(content, ".html")
         assert "Hello" in result
         assert "World" in result
 
@@ -98,33 +103,40 @@ class TestTranslators:
 
     def test_google_translator_init(self):
         from repo_translator.translators.google import GoogleTranslator
-        t = GoogleTranslator('zh', 'en')
-        assert t.name == 'Google Translate'
+
+        t = GoogleTranslator("zh", "en")
+        assert t.name == "Google Translate"
 
     def test_translator_factory(self):
         from repo_translator.translators import get_translator
-        t = get_translator('google', 'zh', 'en')
-        assert t.name == 'Google Translate'
+
+        t = get_translator("google", "zh", "en")
+        assert t.name == "Google Translate"
 
     def test_google_alt_accepts_zh_alias(self):
         from repo_translator.translators import get_translator
-        t = get_translator('google-alt', 'zh', 'en')
-        assert t.name == 'Google Translate (deep-translator)'
+
+        t = get_translator("google-alt", "zh", "en")
+        assert t.name == "Google Translate (deep-translator)"
 
     def test_unknown_engine(self):
         from repo_translator.translators import get_translator
+
         with pytest.raises(ValueError, match="Unknown engine"):
-            get_translator('unknown', 'zh', 'en')
+            get_translator("unknown", "zh", "en")
 
     def test_chunk_text(self):
         from repo_translator.translators.base import BaseTranslator
 
         class DummyTranslator(BaseTranslator):
-            def translate_text(self, text): return text
-            @property
-            def name(self): return "dummy"
+            def translate_text(self, text):
+                return text
 
-        t = DummyTranslator('zh', 'en')
+            @property
+            def name(self):
+                return "dummy"
+
+        t = DummyTranslator("zh", "en")
         chunks = t._chunk_text("a\n" * 1000, max_chars=100)
         assert len(chunks) > 1
         assert all(len(c) <= 120 for c in chunks)  # some margin
@@ -135,9 +147,10 @@ class TestCLI:
 
     def test_cli_engines(self, runner):
         from repo_translator.cli import main
-        result = runner.invoke(main, ['engines'])
+
+        result = runner.invoke(main, ["engines"])
         assert result.exit_code == 0
-        assert 'google' in result.output
+        assert "google" in result.output
 
     def test_cli_detect_local_repo_reports_cjk_percentage(self, runner, tmp_path):
         from repo_translator.cli import main
@@ -145,11 +158,11 @@ class TestCLI:
         readme = tmp_path / "README.md"
         readme.write_text("# 标题\n\n这是中文文本，用于测试语言检测。", encoding="utf-8")
 
-        result = runner.invoke(main, ['detect', '--repo', str(tmp_path), '--sample', '1'])
+        result = runner.invoke(main, ["detect", "--repo", str(tmp_path), "--sample", "1"])
 
         assert result.exit_code == 0
-        assert 'CJK %' in result.output
-        assert 'README.md' in result.output
+        assert "CJK %" in result.output
+        assert "README.md" in result.output
 
     def test_cli_review_accepts_reviewer_alias(self, runner, tmp_path):
         from repo_translator.cli import main
@@ -157,11 +170,11 @@ class TestCLI:
         readme = tmp_path / "README.md"
         readme.write_text("# Hello\n\nTranslated content.", encoding="utf-8")
 
-        result = runner.invoke(main, [
-            'review', '--dir', str(tmp_path), '--reviewer', 'openai', '--sample-rate', '0'
-        ])
+        result = runner.invoke(
+            main, ["review", "--dir", str(tmp_path), "--reviewer", "openai", "--sample-rate", "0"]
+        )
         assert result.exit_code == 0
-        assert 'Review Report' in result.output
+        assert "Review Report" in result.output
 
     def test_translate_preserves_broken_symlinks_when_copying(self, tmp_path):
         from repo_translator.core import RepoTranslator
@@ -175,10 +188,10 @@ class TestCLI:
         output.mkdir()
         (output / "stale.txt").write_text("old", encoding="utf-8")
 
-        translator = RepoTranslator(translator_engine='google-alt', dry_run=True)
+        translator = RepoTranslator(translator_engine="google-alt", dry_run=True)
         result = translator.run(repo_dir=str(source), output_dir=str(output))
 
-        assert result['success'] is True
+        assert result["success"] is True
         assert not (output / "stale.txt").exists()
         copied_link = output / "missing.pdf"
         assert copied_link.is_symlink()
@@ -298,17 +311,18 @@ class TestReviewers:
         translated = tmp_path / "README.md"
         translated.write_text("# Title\n\n这里还有未翻译的中文。", encoding="utf-8")
 
-        reviewer = AIReviewer(source_lang='zh', sample_rate=0, api_key='')
+        reviewer = AIReviewer(source_lang="zh", sample_rate=0, api_key="")
         issues = reviewer._check_file(
             translated,
             translated.read_text(encoding="utf-8"),
             root=tmp_path,
         )
 
-        assert any(issue.issue_type == 'untranslated' for issue in issues)
+        assert any(issue.issue_type == "untranslated" for issue in issues)
 
 
 @pytest.fixture
 def runner():
     from click.testing import CliRunner
+
     return CliRunner()
