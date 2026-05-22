@@ -29,6 +29,7 @@ repo-translator = "repo_translator.cli:main"
 
 [tool.black]
 line-length = 100
+target-version = ["py39"]
 
 [tool.ruff]
 line-length = 100
