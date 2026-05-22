@@ -11,19 +11,19 @@ logger = logging.getLogger(__name__)
 
 # DeepL language code mapping
 DEEPL_LANG_MAP = {
-    'zh': 'ZH',
-    'ja': 'JA',
-    'ko': 'KO',
-    'en': 'EN',
-    'de': 'DE',
-    'fr': 'FR',
-    'es': 'ES',
-    'pt': 'PT',
-    'ru': 'RU',
-    'ar': 'AR',
-    'it': 'IT',
-    'nl': 'NL',
-    'pl': 'PL',
+    "zh": "ZH",
+    "ja": "JA",
+    "ko": "KO",
+    "en": "EN",
+    "de": "DE",
+    "fr": "FR",
+    "es": "ES",
+    "pt": "PT",
+    "ru": "RU",
+    "ar": "AR",
+    "it": "IT",
+    "nl": "NL",
+    "pl": "PL",
 }
 
 
@@ -32,7 +32,7 @@ class DeepLTranslator(BaseTranslator):
 
     def __init__(self, source_lang: str, target_lang: str, api_key: str = None):
         super().__init__(source_lang, target_lang)
-        self.api_key = api_key or os.environ.get('DEEPL_API_KEY', '')
+        self.api_key = api_key or os.environ.get("DEEPL_API_KEY", "")
         if not self.api_key:
             raise ValueError(
                 "DeepL API key required. Set DEEPL_API_KEY env var or pass api_key parameter.\n"
@@ -40,7 +40,7 @@ class DeepLTranslator(BaseTranslator):
             )
         self._base_url = "https://api-free.deepl.com/v2/translate"
         # Use paid endpoint if key doesn't end with :fx
-        if not self.api_key.endswith(':fx'):
+        if not self.api_key.endswith(":fx"):
             self._base_url = "https://api.deepl.com/v2/translate"
 
     @property
@@ -75,25 +75,25 @@ class DeepLTranslator(BaseTranslator):
                 resp = requests.post(
                     self._base_url,
                     data={
-                        'auth_key': self.api_key,
-                        'text': chunk,
-                        'source_lang': src,
-                        'target_lang': dest,
-                        'preserve_formatting': '1',
-                        'split_sentences': '0',
+                        "auth_key": self.api_key,
+                        "text": chunk,
+                        "source_lang": src,
+                        "target_lang": dest,
+                        "preserve_formatting": "1",
+                        "split_sentences": "0",
                     },
                     timeout=30,
                 )
                 resp.raise_for_status()
                 result = resp.json()
-                translated_chunks.append(result['translations'][0]['text'])
+                translated_chunks.append(result["translations"][0]["text"])
             except Exception as e:
                 logger.warning(f"DeepL translation failed: {e}")
                 translated_chunks.append(chunk)
 
             time.sleep(0.1)
 
-        return '\n'.join(translated_chunks)
+        return "\n".join(translated_chunks)
 
     def translate_batch(self, texts: List[str]) -> List[str]:
         """Batch translate — DeepL supports multiple texts in one request."""
@@ -106,7 +106,7 @@ class DeepLTranslator(BaseTranslator):
         # Batch in groups of 50
         batch_size = 50
         for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+            batch = texts[i : i + batch_size]
             non_empty = [(j, t) for j, t in enumerate(batch) if t.strip()]
 
             if not non_empty:
@@ -115,22 +115,22 @@ class DeepLTranslator(BaseTranslator):
 
             try:
                 data = {
-                    'auth_key': self.api_key,
-                    'source_lang': src,
-                    'target_lang': dest,
-                    'preserve_formatting': '1',
-                    'split_sentences': '0',
+                    "auth_key": self.api_key,
+                    "source_lang": src,
+                    "target_lang": dest,
+                    "preserve_formatting": "1",
+                    "split_sentences": "0",
                 }
                 for idx, (_, text) in enumerate(non_empty):
-                    data[f'text[{idx}]'] = text
+                    data[f"text[{idx}]"] = text
 
                 resp = requests.post(self._base_url, data=data, timeout=60)
                 resp.raise_for_status()
-                translations = resp.json()['translations']
+                translations = resp.json()["translations"]
 
                 batch_results = list(batch)
                 for (orig_idx, _), trans in zip(non_empty, translations):
-                    batch_results[orig_idx] = trans['text']
+                    batch_results[orig_idx] = trans["text"]
 
                 results.extend(batch_results)
             except Exception as e:

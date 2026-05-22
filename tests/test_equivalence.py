@@ -117,7 +117,9 @@ pip cài đặt repo-translator
         source.mkdir()
         target.mkdir()
         (source / "README.md").write_text("# API 文档\n\n支持 OCR 和 JSON。", encoding="utf-8")
-        (target / "README.md").write_text("# API Docs\n\nSupports OCR, JSON and HTTP.", encoding="utf-8")
+        (target / "README.md").write_text(
+            "# API Docs\n\nSupports OCR, JSON and HTTP.", encoding="utf-8"
+        )
 
         report = verify_equivalence(source, target)
 
@@ -134,13 +136,20 @@ pip cài đặt repo-translator
 
         (source / "README.md").write_text("# 标题\n", encoding="utf-8")
 
-        result = runner.invoke(main, [
-            "verify",
-            "--source", str(source),
-            "--target", str(target),
-            "--json-output", str(output),
-            "--fail-on", "error",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "verify",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--json-output",
+                str(output),
+                "--fail-on",
+                "error",
+            ],
+        )
 
         assert result.exit_code == 1
         data = json.loads(output.read_text(encoding="utf-8"))
@@ -159,4 +168,5 @@ pip cài đặt repo-translator
 @pytest.fixture
 def runner():
     from click.testing import CliRunner
+
     return CliRunner()

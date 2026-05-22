@@ -5,20 +5,17 @@ import re
 import json
 import shutil
 import logging
-import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
-from rich.table import Table
-from rich.panel import Panel
 
-from .detector import detect_file_language, has_cjk, count_cjk_chars
-from .file_filter import get_translatable_files, should_translate
-from .translators import get_translator, list_engines
+from .detector import has_cjk
+from .file_filter import get_translatable_files
+from .translators import get_translator
 from .reviewers import AIReviewer, ReviewReport
 
 logger = logging.getLogger(__name__)
@@ -47,6 +44,7 @@ def _has_cjk_ideograph(text: str) -> bool:
 @dataclass
 class TranslationStats:
     """Statistics for a translation run."""
+
     total_files: int = 0
     translated_files: int = 0
     skipped_files: int = 0
@@ -82,26 +80,26 @@ class RepoTranslator:
 
     def __init__(
         self,
-        source_lang: str = 'zh',
-        target_lang: str = 'en',
-        translator_engine: str = 'google',
+        source_lang: str = "zh",
+        target_lang: str = "en",
+        translator_engine: str = "google",
         translator_api_key: str = None,
         translator_model: str = None,
         translator_base_url: str = None,
         review_engine: str = None,
         review_api_key: str = None,
-        review_model: str = 'gpt-4o-mini',
+        review_model: str = "gpt-4o-mini",
         review_base_url: str = None,
         review_sample_rate: float = 0.15,
         verify: bool = False,
         verify_ai: bool = False,
-        verify_engine: str = 'vercel-ai-gateway',
+        verify_engine: str = "vercel-ai-gateway",
         verify_api_key: str = None,
-        verify_model: str = 'openai/gpt-4o-mini',
+        verify_model: str = "openai/gpt-4o-mini",
         verify_base_url: str = None,
         verify_sample_rate: float = 0.15,
         verify_max_ai_files: int = 20,
-        verify_fail_on: str = 'error',
+        verify_fail_on: str = "error",
         verify_json_output: str = None,
         include_patterns: List[str] = None,
         exclude_patterns: List[str] = None,
@@ -169,17 +167,17 @@ class RepoTranslator:
             github_token: GitHub token for pushing
         """
         result = {
-            'success': False,
-            'stats': None,
-            'review': None,
-            'verification': None,
-            'push_url': None,
+            "success": False,
+            "stats": None,
+            "review": None,
+            "verification": None,
+            "push_url": None,
         }
 
         try:
             # Step 1: Get source repo
             if repo_url:
-                source_dir = self.clone(repo_url, output_dir or '/tmp/repo-translate-source')
+                source_dir = self.clone(repo_url, output_dir or "/tmp/repo-translate-source")
             elif repo_dir:
                 source_dir = Path(repo_dir)
             else:
@@ -205,7 +203,7 @@ class RepoTranslator:
             # Step 3: AI Review (optional)
             if self.reviewer:
                 report = self.reviewer.review(dest_dir, source_dir)
-                result['review'] = report
+                result["review"] = report
                 console.print(report.summary())
 
             # Step 4: Equivalence verification (optional, before push)
@@ -225,13 +223,13 @@ class RepoTranslator:
                     sample_rate=self.verify_sample_rate,
                     max_ai_files=self.verify_max_ai_files,
                 )
-                result['verification'] = report
+                result["verification"] = report
                 console.print(report.summary())
 
                 if self.verify_json_output:
                     Path(self.verify_json_output).write_text(
                         json.dumps(report.to_dict(), indent=2, ensure_ascii=False),
-                        encoding='utf-8',
+                        encoding="utf-8",
                     )
 
                 if report.should_fail(self.verify_fail_on):
@@ -243,17 +241,18 @@ class RepoTranslator:
             # Step 5: Push to GitHub (optional)
             if push_to:
                 push_url = self.push(dest_dir, push_to, github_token)
-                result['push_url'] = push_url
+                result["push_url"] = push_url
 
-            result['success'] = True
-            result['stats'] = self.stats
+            result["success"] = True
+            result["stats"] = self.stats
 
         except Exception as e:
             logger.error(f"Pipeline failed: {e}")
             if self.verbose:
                 import traceback
+
                 traceback.print_exc()
-            result['error'] = str(e)
+            result["error"] = str(e)
 
         return result
 
@@ -289,16 +288,22 @@ class RepoTranslator:
         files = get_translatable_files(directory)
         self.stats.total_files = len(files)
 
-        console.print(f"\n🌐 Translating [cyan]{len(files)}[/cyan] files "
-                       f"({self.source_lang} → {self.target_lang})")
+        console.print(
+            f"\n🌐 Translating [cyan]{len(files)}[/cyan] files "
+            f"({self.source_lang} → {self.target_lang})"
+        )
         console.print(f"   Engine: [green]{self.translator.name}[/green]")
 
         # Filter to only files that need translation
         to_translate = []
         for filepath in files:
             try:
-                content = filepath.read_text(encoding='utf-8', errors='ignore')
-                if has_cjk(content) if self.source_lang in ('zh', 'ja', 'ko') else len(content.strip()) > 20:
+                content = filepath.read_text(encoding="utf-8", errors="ignore")
+                if (
+                    has_cjk(content)
+                    if self.source_lang in ("zh", "ja", "ko")
+                    else len(content.strip()) > 20
+                ):
                     to_translate.append(filepath)
                 else:
                     self.stats.skipped_files += 1
@@ -324,7 +329,7 @@ class RepoTranslator:
             task = progress.add_task("Translating...", total=len(to_translate))
 
             for i in range(0, len(to_translate), self.batch_size):
-                batch = to_translate[i:i + self.batch_size]
+                batch = to_translate[i : i + self.batch_size]
                 self._translate_batch(batch, directory, progress, task)
 
         self.stats.end_time = datetime.now()
@@ -344,11 +349,12 @@ class RepoTranslator:
         for filepath in files:
             try:
                 rel_path = filepath.relative_to(root)
-                content = filepath.read_text(encoding='utf-8', errors='ignore')
+                content = filepath.read_text(encoding="utf-8", errors="ignore")
                 self.stats.total_chars += len(content)
 
                 # Extract translatable text
                 from .detector import extract_translatable_text
+
                 translatable = extract_translatable_text(content, filepath.suffix)
 
                 if not translatable or len(translatable.strip()) < 5:
@@ -360,24 +366,20 @@ class RepoTranslator:
                 if self.dry_run:
                     logger.info(f"[DRY RUN] Would translate: {rel_path}")
                 else:
-                    if filepath.suffix in ('.md', '.markdown', '.rst', '.txt'):
+                    if filepath.suffix in (".md", ".markdown", ".rst", ".txt"):
                         # Documentation: translate prose while preserving code/tokens.
                         translated = self._translate_markdown(content)
                         self.stats.translated_chars += len(translated)
-                        filepath.write_text(translated, encoding='utf-8')
-                    elif filepath.suffix == '.json':
+                        filepath.write_text(translated, encoding="utf-8")
+                    elif filepath.suffix == ".json":
                         translated = self._translate_json_content(content)
                         self.stats.translated_chars += len(translated)
-                        filepath.write_text(translated, encoding='utf-8')
+                        filepath.write_text(translated, encoding="utf-8")
                     else:
                         # Source code: translate line-by-line, only CJK lines
-                        translated_lines = self._translate_source_lines(
-                            content.split('\n')
-                        )
-                        self.stats.translated_chars += sum(
-                            len(l) for l in translated_lines
-                        )
-                        filepath.write_text('\n'.join(translated_lines), encoding='utf-8')
+                        translated_lines = self._translate_source_lines(content.split("\n"))
+                        self.stats.translated_chars += sum(len(line) for line in translated_lines)
+                        filepath.write_text("\n".join(translated_lines), encoding="utf-8")
 
                 self.stats.translated_files += 1
 
@@ -414,21 +416,21 @@ class RepoTranslator:
         # Translate in batches
         chunk_size = 20
         for chunk_start in range(0, len(batch_to_translate), chunk_size):
-            chunk = batch_to_translate[chunk_start:chunk_start + chunk_size]
-            chunk_idx = batch_indices[chunk_start:chunk_start + chunk_size]
-            chunk_indent = batch_indents[chunk_start:chunk_start + chunk_size]
+            chunk = batch_to_translate[chunk_start : chunk_start + chunk_size]
+            chunk_idx = batch_indices[chunk_start : chunk_start + chunk_size]
+            chunk_indent = batch_indents[chunk_start : chunk_start + chunk_size]
 
             # Join with separator for context
-            joined = '\n|||SEP|||\n'.join(chunk)
+            joined = "\n|||SEP|||\n".join(chunk)
             try:
                 translated = self._translate_preserving_tokens(joined)
-                parts = translated.split('|||SEP|||')
+                parts = translated.split("|||SEP|||")
 
                 for idx, part, indent in zip(chunk_idx, parts, chunk_indent):
                     cleaned = part.strip()
                     if cleaned:
                         # Restore original indentation
-                        translated_lines[idx] = ' ' * indent + cleaned
+                        translated_lines[idx] = " " * indent + cleaned
             except Exception as e:
                 logger.warning(f"Line translation failed: {e}")
                 # Keep original lines on failure
@@ -455,7 +457,7 @@ class RepoTranslator:
             newline = "\n" if line.endswith("\n") else ""
             translated_lines.append(self._translate_preserving_tokens(line_body) + newline)
 
-        return ''.join(translated_lines)
+        return "".join(translated_lines)
 
     def _translate_json_content(self, content: str) -> str:
         """Translate JSON string values while preserving keys and valid JSON syntax."""
@@ -473,7 +475,7 @@ class RepoTranslator:
             return value
 
         translated = translate_value(data)
-        indent = 2 if '\n' in content else None
+        indent = 2 if "\n" in content else None
         return json.dumps(translated, ensure_ascii=False, indent=indent)
 
     def _translate_preserving_tokens(self, text: str) -> str:
@@ -485,14 +487,14 @@ class RepoTranslator:
         last = 0
         for match in PROTECTED_TOKEN_PATTERN.finditer(text):
             if match.start() > last:
-                pieces.append(self._translate_text_span(text[last:match.start()]))
+                pieces.append(self._translate_text_span(text[last : match.start()]))
             pieces.append(match.group(0))
             last = match.end()
 
         if last < len(text):
             pieces.append(self._translate_text_span(text[last:]))
 
-        return ''.join(pieces)
+        return "".join(pieces)
 
     def _translate_text_span(self, text: str) -> str:
         """Translate a non-protected text span, keeping blank spans byte-for-byte."""
@@ -506,12 +508,12 @@ class RepoTranslator:
         Smart merge: replace translatable content while preserving code structure.
         """
         # For markdown and text files: direct replacement
-        if suffix in ('.md', '.markdown', '.rst', '.txt'):
+        if suffix in (".md", ".markdown", ".rst", ".txt"):
             return translated
 
         # For other files: line-by-line replacement
-        orig_lines = original.split('\n')
-        trans_lines = translated.split('\n')
+        orig_lines = original.split("\n")
+        trans_lines = translated.split("\n")
 
         # If line counts match, do 1:1 replacement
         if len(orig_lines) == len(trans_lines):
@@ -521,7 +523,7 @@ class RepoTranslator:
                     result.append(trans_line)
                 else:
                     result.append(orig_line)
-            return '\n'.join(result)
+            return "\n".join(result)
 
         # Fallback: return translated content
         return translated
@@ -541,7 +543,7 @@ class RepoTranslator:
         """Push translated files to GitHub."""
         import git
 
-        token = token or os.environ.get('GITHUB_TOKEN', '')
+        token = token or os.environ.get("GITHUB_TOKEN", "")
         if not token:
             raise ValueError("GitHub token required for pushing. Set GITHUB_TOKEN env var.")
 
@@ -557,16 +559,18 @@ class RepoTranslator:
         for remote in repo.remotes:
             repo.delete_remote(remote)
 
-        origin = repo.create_remote('origin', remote_url)
+        origin = repo.create_remote("origin", remote_url)
 
         # Stage all
         repo.git.add(A=True)
 
         # Commit
-        repo.index.commit(f"Translate {self.source_lang} → {self.target_lang} using repo-translator")
+        repo.index.commit(
+            f"Translate {self.source_lang} → {self.target_lang} using repo-translator"
+        )
 
         # Push
-        origin.push(refspec='main:main', force=True)
+        origin.push(refspec="main:main", force=True)
 
         push_url = f"https://github.com/{repo_name}"
         console.print(f"   ✅ Pushed to {push_url}")

@@ -33,7 +33,20 @@ SKIP_DIRS = {
 }
 
 SYNTAX_CHECK_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".py", ".xml", ".svg", ".ui"}
-AI_REVIEW_EXTENSIONS = {".md", ".markdown", ".rst", ".txt", ".json", ".yaml", ".yml", ".toml", ".xml", ".svg", ".po", ".pot"}
+AI_REVIEW_EXTENSIONS = {
+    ".md",
+    ".markdown",
+    ".rst",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".svg",
+    ".po",
+    ".pot",
+}
 
 SEVERITY_RANK = {"info": 1, "warning": 2, "error": 3}
 
@@ -169,20 +182,24 @@ def verify_equivalence(
     report.common_files = len(common_paths)
 
     for rel_path in sorted(source_paths - target_paths):
-        report.add_issue(EquivalenceIssue(
-            file=rel_path,
-            issue_type="missing_file",
-            severity="error",
-            message="File exists in source repo but is missing from translated repo.",
-        ))
+        report.add_issue(
+            EquivalenceIssue(
+                file=rel_path,
+                issue_type="missing_file",
+                severity="error",
+                message="File exists in source repo but is missing from translated repo.",
+            )
+        )
 
     for rel_path in sorted(target_paths - source_paths):
-        report.add_issue(EquivalenceIssue(
-            file=rel_path,
-            issue_type="extra_file",
-            severity="warning",
-            message="File exists in translated repo but not in source repo.",
-        ))
+        report.add_issue(
+            EquivalenceIssue(
+                file=rel_path,
+                issue_type="extra_file",
+                severity="warning",
+                message="File exists in translated repo but not in source repo.",
+            )
+        )
 
     for rel_path in common_paths:
         source_path = source_files[rel_path]
@@ -227,22 +244,26 @@ def _file_manifest(root: Path) -> Dict[str, Path]:
 def _check_pair(source_path: Path, target_path: Path, rel_path: str, report: EquivalenceReport):
     if source_path.is_symlink() or target_path.is_symlink():
         if not (source_path.is_symlink() and target_path.is_symlink()):
-            report.add_issue(EquivalenceIssue(
-                file=rel_path,
-                issue_type="symlink_changed",
-                severity="error",
-                message="Path changed between symlink and regular file during translation.",
-            ))
+            report.add_issue(
+                EquivalenceIssue(
+                    file=rel_path,
+                    issue_type="symlink_changed",
+                    severity="error",
+                    message="Path changed between symlink and regular file during translation.",
+                )
+            )
             return
         if source_path.readlink() != target_path.readlink():
-            report.add_issue(EquivalenceIssue(
-                file=rel_path,
-                issue_type="symlink_changed",
-                severity="error",
-                message="Symlink target changed during translation.",
-                source=str(source_path.readlink()),
-                target=str(target_path.readlink()),
-            ))
+            report.add_issue(
+                EquivalenceIssue(
+                    file=rel_path,
+                    issue_type="symlink_changed",
+                    severity="error",
+                    message="Symlink target changed during translation.",
+                    source=str(source_path.readlink()),
+                    target=str(target_path.readlink()),
+                )
+            )
         return
 
     source_is_binary = _is_binary(source_path)
@@ -250,12 +271,14 @@ def _check_pair(source_path: Path, target_path: Path, rel_path: str, report: Equ
 
     if source_is_binary or target_is_binary:
         if _sha256(source_path) != _sha256(target_path):
-            report.add_issue(EquivalenceIssue(
-                file=rel_path,
-                issue_type="binary_changed",
-                severity="error",
-                message="Binary file checksum changed during translation.",
-            ))
+            report.add_issue(
+                EquivalenceIssue(
+                    file=rel_path,
+                    issue_type="binary_changed",
+                    severity="error",
+                    message="Binary file checksum changed during translation.",
+                )
+            )
         return
 
     source_text = source_path.read_text(encoding="utf-8", errors="ignore")
@@ -282,12 +305,14 @@ def _check_syntax(source_path: Path, target_path: Path, rel_path: str, report: E
     try:
         parser(target_path)
     except Exception as exc:
-        report.add_issue(EquivalenceIssue(
-            file=rel_path,
-            issue_type="syntax_error",
-            severity="error",
-            message=f"Translated file is no longer valid {suffix} syntax: {exc}",
-        ))
+        report.add_issue(
+            EquivalenceIssue(
+                file=rel_path,
+                issue_type="syntax_error",
+                severity="error",
+                message=f"Translated file is no longer valid {suffix} syntax: {exc}",
+            )
+        )
 
 
 def _parser_for_suffix(suffix: str) -> Optional[Callable[[Path], object]]:
@@ -297,8 +322,10 @@ def _parser_for_suffix(suffix: str) -> Optional[Callable[[Path], object]]:
         return lambda path: yaml.safe_load(path.read_text(encoding="utf-8"))
     if suffix == ".toml" and tomllib is not None:
         toml_parser = tomllib
+
         def parse_toml(path: Path):
             return toml_parser.loads(path.read_text(encoding="utf-8"))
+
         return parse_toml
     if suffix == ".py":
         return lambda path: compile(path.read_text(encoding="utf-8"), str(path), "exec")
@@ -316,45 +343,59 @@ def _check_invariants(
 ):
     invariant_patterns = [
         ("url_changed", "URL set changed", r"https?://[^\s)>'\"]+"),
-        ("email_changed", "Email address set changed", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
-        ("placeholder_changed", "Placeholder token set changed", r"\{\{[^{}]+\}\}|\{[A-Za-z_][A-Za-z0-9_]*\}|%\([^)]+\)[sd]|%[sd]|\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*"),
+        (
+            "email_changed",
+            "Email address set changed",
+            r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+        ),
+        (
+            "placeholder_changed",
+            "Placeholder token set changed",
+            r"\{\{[^{}]+\}\}|\{[A-Za-z_][A-Za-z0-9_]*\}|%\([^)]+\)[sd]|%[sd]|\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*",
+        ),
     ]
 
     for issue_type, message, pattern in invariant_patterns:
         source_tokens = Counter(re.findall(pattern, source_text))
         target_tokens = Counter(re.findall(pattern, target_text))
         if source_tokens != target_tokens:
-            report.add_issue(EquivalenceIssue(
-                file=rel_path,
-                issue_type=issue_type,
-                severity="error",
-                message=message,
-                source=str(sorted(source_tokens.elements())[:10]),
-                target=str(sorted(target_tokens.elements())[:10]),
-            ))
+            report.add_issue(
+                EquivalenceIssue(
+                    file=rel_path,
+                    issue_type=issue_type,
+                    severity="error",
+                    message=message,
+                    source=str(sorted(source_tokens.elements())[:10]),
+                    target=str(sorted(target_tokens.elements())[:10]),
+                )
+            )
 
     if suffix in {".md", ".markdown", ".rst"}:
         source_blocks = _markdown_code_blocks(source_text)
         target_blocks = _markdown_code_blocks(target_text)
         if source_blocks != target_blocks:
-            report.add_issue(EquivalenceIssue(
-                file=rel_path,
-                issue_type="code_block_changed",
-                severity="error",
-                message="Fenced code block content changed during translation.",
-            ))
+            report.add_issue(
+                EquivalenceIssue(
+                    file=rel_path,
+                    issue_type="code_block_changed",
+                    severity="error",
+                    message="Fenced code block content changed during translation.",
+                )
+            )
 
         source_inline = Counter(re.findall(r"`([^`\n]+)`", source_text))
         target_inline = Counter(re.findall(r"`([^`\n]+)`", target_text))
         if source_inline != target_inline:
-            report.add_issue(EquivalenceIssue(
-                file=rel_path,
-                issue_type="inline_code_changed",
-                severity="error",
-                message="Inline code token set changed during translation.",
-                source=str(sorted(source_inline.elements())[:10]),
-                target=str(sorted(target_inline.elements())[:10]),
-            ))
+            report.add_issue(
+                EquivalenceIssue(
+                    file=rel_path,
+                    issue_type="inline_code_changed",
+                    severity="error",
+                    message="Inline code token set changed during translation.",
+                    source=str(sorted(source_inline.elements())[:10]),
+                    target=str(sorted(target_inline.elements())[:10]),
+                )
+            )
 
 
 def _markdown_code_blocks(text: str) -> List[str]:
@@ -400,14 +441,16 @@ def _run_ai_equivalence_review(
     )
     ai_report = reviewer.review(target_dir, source_dir, files=selected)
     for issue in ai_report.issues:
-        report.add_issue(EquivalenceIssue(
-            file=issue.file,
-            issue_type=f"ai_{issue.issue_type}",
-            severity=issue.severity,
-            message=issue.suggestion,
-            source=issue.original,
-            target=issue.translated,
-        ))
+        report.add_issue(
+            EquivalenceIssue(
+                file=issue.file,
+                issue_type=f"ai_{issue.issue_type}",
+                severity=issue.severity,
+                message=issue.suggestion,
+                source=issue.original,
+                target=issue.translated,
+            )
+        )
 
 
 def _select_ai_files(files: List[Path], sample_rate: float, max_files: int) -> List[Path]:

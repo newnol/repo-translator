@@ -10,21 +10,21 @@ logger = logging.getLogger(__name__)
 
 # Language code mapping for googletrans (unofficial Google client).
 LANG_MAP = {
-    'zh': 'zh-cn',
-    'zh-cn': 'zh-cn',
-    'zh-tw': 'zh-tw',
-    'he': 'iw',
-    'jv': 'jv',
+    "zh": "zh-cn",
+    "zh-cn": "zh-cn",
+    "zh-tw": "zh-tw",
+    "he": "iw",
+    "jv": "jv",
 }
 
 # deep-translator is stricter about some Google language aliases/casing.
 DEEP_TRANSLATOR_LANG_MAP = {
-    'zh': 'zh-CN',
-    'zh-cn': 'zh-CN',
-    'zh-CN': 'zh-CN',
-    'zh-tw': 'zh-TW',
-    'zh-TW': 'zh-TW',
-    'he': 'iw',
+    "zh": "zh-CN",
+    "zh-cn": "zh-CN",
+    "zh-CN": "zh-CN",
+    "zh-tw": "zh-TW",
+    "zh-TW": "zh-TW",
+    "he": "iw",
 }
 
 
@@ -40,6 +40,7 @@ class GoogleTranslator(BaseTranslator):
         """Lazy init googletrans."""
         try:
             from googletrans import Translator
+
             self._translator = Translator()
         except ImportError:
             raise ImportError("googletrans not installed. Run: pip install googletrans==4.0.0-rc1")
@@ -80,7 +81,7 @@ class GoogleTranslator(BaseTranslator):
             # Rate limiting
             time.sleep(0.3)
 
-        return '\n'.join(translated_chunks)
+        return "\n".join(translated_chunks)
 
     def translate_batch(self, texts: List[str]) -> List[str]:
         """Batch translate with rate limiting."""
@@ -104,6 +105,7 @@ class DeepTranslator(BaseTranslator):
     def _init_translator(self):
         try:
             from deep_translator import GoogleTranslator as DTGoogle
+
             self._translator = DTGoogle(
                 source=self._get_lang_code(self.source_lang),
                 target=self._get_lang_code(self.target_lang),
@@ -143,4 +145,4 @@ class DeepTranslator(BaseTranslator):
 
             time.sleep(0.2)
 
-        return '\n'.join(translated_chunks)
+        return "\n".join(translated_chunks)
