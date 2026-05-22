@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "black", "ruff"]
+dev = ["pytest", "pytest-cov", "black==25.11.0", "ruff"]
 
 [project.scripts]
 repo-translator = "repo_translator.cli:main"
