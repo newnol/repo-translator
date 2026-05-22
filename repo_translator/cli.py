@@ -12,7 +12,7 @@ from rich.panel import Panel
 
 from .core import RepoTranslator
 from .translators import list_engines
-from .detector import detect_file_language, has_cjk
+from .detector import detect_file_language, has_cjk, count_cjk_chars
 from .file_filter import get_translatable_files
 
 console = Console()
@@ -39,16 +39,29 @@ def main(verbose):
 @click.option('--model', default=None, help='Model name for LLM engines')
 @click.option('--base-url', default=None, help='Base URL for LLM/Ollama engines')
 @click.option('--output-dir', '-o', default=None, help='Output directory')
-@click.option('--review-with', default=None, help='AI review engine (openai, anthropic)')
+@click.option('--review-with', default=None, help='AI review engine (openai, vercel-ai-gateway)')
 @click.option('--review-api-key', envvar='REVIEW_API_KEY', default=None, help='API key for AI reviewer')
 @click.option('--review-model', default='gpt-4o-mini', help='Model for AI review')
+@click.option('--review-base-url', default=None, help='Base URL for AI reviewer')
 @click.option('--review-sample', default=0.15, type=float, help='Sample rate for AI review (0.0-1.0)')
+@click.option('--verify', is_flag=True, help='Verify source and translated repo equivalence before push')
+@click.option('--verify-ai', is_flag=True, help='Use AI semantic equivalence checks during verification')
+@click.option('--verify-provider', default='vercel-ai-gateway', help='AI provider for verify --verify-ai')
+@click.option('--verify-api-key', envvar=['AI_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY', 'REVIEW_API_KEY'], default=None, help='API key for verify --verify-ai')
+@click.option('--verify-model', default='openai/gpt-4o-mini', help='AI model for verify --verify-ai')
+@click.option('--verify-base-url', default=None, help='Base URL for verify --verify-ai')
+@click.option('--verify-sample', default=0.15, type=float, help='Sample rate for verify --verify-ai')
+@click.option('--verify-max-files', default=20, type=int, help='Max files for verify --verify-ai')
+@click.option('--verify-fail-on', type=click.Choice(['info', 'warning', 'error', 'never']), default='error', help='Fail translation if verify finds this severity or worse')
+@click.option('--verify-json-output', default=None, help='Write verification report JSON to this path')
 @click.option('--push-to', default=None, help='Push to GitHub repo (user/repo)')
 @click.option('--github-token', envvar='GITHUB_TOKEN', default=None, help='GitHub token for pushing')
 @click.option('--dry-run', is_flag=True, help='Show what would be translated without doing it')
 def translate(
     repo, source_lang, target_lang, translator, api_key, model, base_url,
-    output_dir, review_with, review_api_key, review_model, review_sample,
+    output_dir, review_with, review_api_key, review_model, review_base_url, review_sample,
+    verify, verify_ai, verify_provider, verify_api_key, verify_model, verify_base_url,
+    verify_sample, verify_max_files, verify_fail_on, verify_json_output,
     push_to, github_token, dry_run,
 ):
     """Translate a repository from one language to another."""
@@ -67,7 +80,8 @@ def translate(
             repo_name = repo.rstrip('/').split('/')[-1].replace('.git', '')
             output_dir = f"./{repo_name}-translated"
         else:
-            output_dir = repo  # translate in place
+            repo_path = Path(repo)
+            output_dir = str(repo_path.with_name(repo_path.name + '-translated')) if verify else repo
 
     # Create translator
     translator_obj = RepoTranslator(
@@ -80,7 +94,18 @@ def translate(
         review_engine=review_with,
         review_api_key=review_api_key,
         review_model=review_model,
+        review_base_url=review_base_url,
         review_sample_rate=review_sample,
+        verify=verify,
+        verify_ai=verify_ai,
+        verify_engine=verify_provider,
+        verify_api_key=verify_api_key,
+        verify_model=verify_model,
+        verify_base_url=verify_base_url,
+        verify_sample_rate=verify_sample,
+        verify_max_ai_files=verify_max_files,
+        verify_fail_on=verify_fail_on,
+        verify_json_output=verify_json_output,
         dry_run=dry_run,
         verbose=main.context_settings.get('verbose', False),
     )
@@ -151,8 +176,8 @@ def detect(repo, sample):
 @main.command()
 @click.option('--dir', '-d', required=True, help='Directory to review')
 @click.option('--source-lang', '-s', default='zh', help='Source language')
-@click.option('--engine', '-e', default='openai', help='Review engine')
-@click.option('--api-key', envvar='REVIEW_API_KEY', default=None, help='API key')
+@click.option('--engine', '--reviewer', '-e', default='openai', help='Review engine (openai, vercel-ai-gateway)')
+@click.option('--api-key', envvar=['REVIEW_API_KEY', 'AI_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY'], default=None, help='API key')
 @click.option('--sample-rate', default=0.15, type=float, help='Sample rate')
 def review(dir, source_lang, engine, api_key, sample_rate):
     """Review translation quality with AI."""
@@ -167,6 +192,53 @@ def review(dir, source_lang, engine, api_key, sample_rate):
 
     report = reviewer.review(Path(dir))
     console.print(report.summary())
+
+
+@main.command()
+@click.option('--source', '-s', required=True, help='Original source repository directory')
+@click.option('--target', '-t', required=True, help='Translated repository directory')
+@click.option('--ai-check', is_flag=True, help='Run optional AI semantic equivalence review')
+@click.option('--ai-provider', '--reviewer', default='vercel-ai-gateway', help='AI provider for semantic review')
+@click.option('--api-key', envvar=['AI_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY', 'REVIEW_API_KEY'], default=None, help='AI provider API key')
+@click.option('--model', default='openai/gpt-4o-mini', help='AI model for semantic review')
+@click.option('--base-url', default=None, help='AI provider base URL')
+@click.option('--source-lang', default='zh', help='Source language')
+@click.option('--target-lang', default='en', help='Target language')
+@click.option('--sample-rate', default=0.15, type=float, help='AI sample rate')
+@click.option('--max-ai-files', default=20, type=int, help='Max files for AI semantic review')
+@click.option('--fail-on', type=click.Choice(['info', 'warning', 'error', 'never']), default='error', help='Exit non-zero if this severity or worse is found')
+@click.option('--json-output', default=None, help='Write verification report JSON to this path')
+def verify(
+    source, target, ai_check, ai_provider, api_key, model, base_url,
+    source_lang, target_lang, sample_rate, max_ai_files, fail_on, json_output,
+):
+    """Verify that a translated repo remains technically equivalent to the source."""
+    import json
+    from .equivalence import verify_equivalence
+
+    report = verify_equivalence(
+        source_dir=Path(source),
+        target_dir=Path(target),
+        ai_check=ai_check,
+        ai_engine=ai_provider,
+        ai_api_key=api_key,
+        ai_model=model,
+        ai_base_url=base_url,
+        source_lang=source_lang,
+        target_lang=target_lang,
+        sample_rate=sample_rate,
+        max_ai_files=max_ai_files,
+    )
+    console.print(report.summary())
+
+    if json_output:
+        Path(json_output).write_text(
+            json.dumps(report.to_dict(), indent=2, ensure_ascii=False),
+            encoding='utf-8',
+        )
+
+    if report.should_fail(fail_on):
+        sys.exit(1)
 
 
 @main.command()

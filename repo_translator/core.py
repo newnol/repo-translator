@@ -7,7 +7,7 @@ import shutil
 import logging
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -23,6 +23,25 @@ from .reviewers import AIReviewer, ReviewReport
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+PROTECTED_TOKEN_PATTERN = re.compile(
+    r"```[\s\S]*?```"  # fenced markdown code blocks
+    r"|`[^`\n]+`"  # inline markdown code
+    r"|\|\|\|SEP\|\|\|"  # internal batch separator
+    r"|https?://[^\s)>'\"]+"  # URLs
+    r"|\{\{[^{}]+\}\}"  # template placeholders
+    r"|\$\{[A-Za-z_][A-Za-z0-9_]*\}"  # ${VAR}
+    r"|\$[A-Za-z_][A-Za-z0-9_]*(?:_[A-Za-z0-9]+)*"  # $x_t / $API_KEY
+    r"|%\([^)]+\)[sd]|%[sd]"  # printf placeholders
+    r"|\{[A-Za-z_][A-Za-z0-9_]*\}"  # {name}
+)
+
+CJK_IDEOGRAPH_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+
+def _has_cjk_ideograph(text: str) -> bool:
+    """Return True only for real CJK word characters, not punctuation/forms."""
+    return bool(CJK_IDEOGRAPH_PATTERN.search(text))
 
 
 @dataclass
@@ -74,6 +93,16 @@ class RepoTranslator:
         review_model: str = 'gpt-4o-mini',
         review_base_url: str = None,
         review_sample_rate: float = 0.15,
+        verify: bool = False,
+        verify_ai: bool = False,
+        verify_engine: str = 'vercel-ai-gateway',
+        verify_api_key: str = None,
+        verify_model: str = 'openai/gpt-4o-mini',
+        verify_base_url: str = None,
+        verify_sample_rate: float = 0.15,
+        verify_max_ai_files: int = 20,
+        verify_fail_on: str = 'error',
+        verify_json_output: str = None,
         include_patterns: List[str] = None,
         exclude_patterns: List[str] = None,
         batch_size: int = 40,
@@ -85,6 +114,16 @@ class RepoTranslator:
         self.batch_size = batch_size
         self.dry_run = dry_run
         self.verbose = verbose
+        self.verify = verify
+        self.verify_ai = verify_ai
+        self.verify_engine = verify_engine
+        self.verify_api_key = verify_api_key
+        self.verify_model = verify_model
+        self.verify_base_url = verify_base_url
+        self.verify_sample_rate = verify_sample_rate
+        self.verify_max_ai_files = verify_max_ai_files
+        self.verify_fail_on = verify_fail_on
+        self.verify_json_output = verify_json_output
 
         # Translation engine
         self.translator = get_translator(
@@ -101,6 +140,7 @@ class RepoTranslator:
         if review_engine:
             self.reviewer = AIReviewer(
                 source_lang=source_lang,
+                target_lang=target_lang,
                 engine=review_engine,
                 api_key=review_api_key,
                 model=review_model,
@@ -132,6 +172,7 @@ class RepoTranslator:
             'success': False,
             'stats': None,
             'review': None,
+            'verification': None,
             'push_url': None,
         }
 
@@ -153,7 +194,9 @@ class RepoTranslator:
                 # Copy and translate in place
                 dest_dir = Path(output_dir)
                 if dest_dir != source_dir:
-                    shutil.copytree(source_dir, dest_dir, dirs_exist_ok=True)
+                    if dest_dir.exists():
+                        shutil.rmtree(dest_dir)
+                    shutil.copytree(source_dir, dest_dir, symlinks=True)
                 self.translate_in_place(dest_dir)
             else:
                 dest_dir = source_dir
@@ -165,7 +208,39 @@ class RepoTranslator:
                 result['review'] = report
                 console.print(report.summary())
 
-            # Step 4: Push to GitHub (optional)
+            # Step 4: Equivalence verification (optional, before push)
+            if self.verify:
+                from .equivalence import verify_equivalence
+
+                report = verify_equivalence(
+                    source_dir=source_dir,
+                    target_dir=dest_dir,
+                    ai_check=self.verify_ai,
+                    ai_engine=self.verify_engine,
+                    ai_api_key=self.verify_api_key,
+                    ai_model=self.verify_model,
+                    ai_base_url=self.verify_base_url,
+                    source_lang=self.source_lang,
+                    target_lang=self.target_lang,
+                    sample_rate=self.verify_sample_rate,
+                    max_ai_files=self.verify_max_ai_files,
+                )
+                result['verification'] = report
+                console.print(report.summary())
+
+                if self.verify_json_output:
+                    Path(self.verify_json_output).write_text(
+                        json.dumps(report.to_dict(), indent=2, ensure_ascii=False),
+                        encoding='utf-8',
+                    )
+
+                if report.should_fail(self.verify_fail_on):
+                    raise ValueError(
+                        f"Verification failed with {len(report.issues)} issue(s); "
+                        f"worst severity: {report.worst_severity}"
+                    )
+
+            # Step 5: Push to GitHub (optional)
             if push_to:
                 push_url = self.push(dest_dir, push_to, github_token)
                 result['push_url'] = push_url
@@ -204,7 +279,7 @@ class RepoTranslator:
         if source_dir != dest_dir:
             if dest_dir.exists():
                 shutil.rmtree(dest_dir)
-            shutil.copytree(source_dir, dest_dir)
+            shutil.copytree(source_dir, dest_dir, symlinks=True)
 
         return self.translate_in_place(dest_dir)
 
@@ -286,8 +361,12 @@ class RepoTranslator:
                     logger.info(f"[DRY RUN] Would translate: {rel_path}")
                 else:
                     if filepath.suffix in ('.md', '.markdown', '.rst', '.txt'):
-                        # Documentation: translate full content
-                        translated = self.translator.translate_text(content)
+                        # Documentation: translate prose while preserving code/tokens.
+                        translated = self._translate_markdown(content)
+                        self.stats.translated_chars += len(translated)
+                        filepath.write_text(translated, encoding='utf-8')
+                    elif filepath.suffix == '.json':
+                        translated = self._translate_json_content(content)
                         self.stats.translated_chars += len(translated)
                         filepath.write_text(translated, encoding='utf-8')
                     else:
@@ -321,7 +400,7 @@ class RepoTranslator:
 
         # Collect lines that need translation, preserving indentation
         for i, line in enumerate(lines):
-            if has_cjk(line) and len(line.strip()) > 2:
+            if has_cjk(line) and _has_cjk_ideograph(line) and len(line.strip()) > 2:
                 batch_to_translate.append(line.strip())
                 batch_indices.append(i)
                 # Save original indentation
@@ -342,7 +421,7 @@ class RepoTranslator:
             # Join with separator for context
             joined = '\n|||SEP|||\n'.join(chunk)
             try:
-                translated = self.translator.translate_text(joined)
+                translated = self._translate_preserving_tokens(joined)
                 parts = translated.split('|||SEP|||')
 
                 for idx, part, indent in zip(chunk_idx, parts, chunk_indent):
@@ -355,6 +434,71 @@ class RepoTranslator:
                 # Keep original lines on failure
 
         return translated_lines
+
+    def _translate_markdown(self, content: str) -> str:
+        """Translate markdown prose without touching code, URLs, or placeholders."""
+        translated_lines = []
+        in_fence = False
+
+        for line in content.splitlines(keepends=True):
+            stripped = line.lstrip()
+            if stripped.startswith("```"):
+                translated_lines.append(line)
+                in_fence = not in_fence
+                continue
+
+            if in_fence or not _has_cjk_ideograph(line):
+                translated_lines.append(line)
+                continue
+
+            line_body = line[:-1] if line.endswith("\n") else line
+            newline = "\n" if line.endswith("\n") else ""
+            translated_lines.append(self._translate_preserving_tokens(line_body) + newline)
+
+        return ''.join(translated_lines)
+
+    def _translate_json_content(self, content: str) -> str:
+        """Translate JSON string values while preserving keys and valid JSON syntax."""
+        data = json.loads(content)
+
+        def translate_value(value: Any) -> Any:
+            if isinstance(value, str):
+                if has_cjk(value):
+                    return self._translate_preserving_tokens(value)
+                return value
+            if isinstance(value, list):
+                return [translate_value(item) for item in value]
+            if isinstance(value, dict):
+                return {key: translate_value(item) for key, item in value.items()}
+            return value
+
+        translated = translate_value(data)
+        indent = 2 if '\n' in content else None
+        return json.dumps(translated, ensure_ascii=False, indent=indent)
+
+    def _translate_preserving_tokens(self, text: str) -> str:
+        """Translate unprotected spans and reassemble protected technical tokens unchanged."""
+        if not text.strip():
+            return text
+
+        pieces = []
+        last = 0
+        for match in PROTECTED_TOKEN_PATTERN.finditer(text):
+            if match.start() > last:
+                pieces.append(self._translate_text_span(text[last:match.start()]))
+            pieces.append(match.group(0))
+            last = match.end()
+
+        if last < len(text):
+            pieces.append(self._translate_text_span(text[last:]))
+
+        return ''.join(pieces)
+
+    def _translate_text_span(self, text: str) -> str:
+        """Translate a non-protected text span, keeping blank spans byte-for-byte."""
+        if not text.strip():
+            return text
+        return self.translator.translate_text(text)
 
     def _apply_translation(self, original: str, translated: str, suffix: str) -> str:
         """

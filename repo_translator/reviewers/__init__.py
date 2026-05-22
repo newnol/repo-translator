@@ -93,6 +93,7 @@ class AIReviewer:
     def __init__(
         self,
         source_lang: str = 'zh',
+        target_lang: str = 'en',
         engine: str = 'openai',
         api_key: str = None,
         model: str = 'gpt-4o-mini',
@@ -101,10 +102,20 @@ class AIReviewer:
         max_files: int = 50,
     ):
         self.source_lang = source_lang
+        self.target_lang = target_lang
         self.engine = engine
-        self.api_key = api_key or os.environ.get('OPENAI_API_KEY', '')
-        self.model = model
-        self.base_url = base_url or 'https://api.openai.com/v1'
+        if engine in ('vercel', 'vercel-ai-gateway', 'ai-gateway'):
+            self.api_key = (
+                api_key
+                or os.environ.get('AI_GATEWAY_API_KEY', '')
+                or os.environ.get('VERCEL_AI_GATEWAY_API_KEY', '')
+            )
+            self.model = model if model != 'gpt-4o-mini' else 'openai/gpt-4o-mini'
+            self.base_url = base_url or 'https://ai-gateway.vercel.sh/v1'
+        else:
+            self.api_key = api_key or os.environ.get('OPENAI_API_KEY', '')
+            self.model = model
+            self.base_url = base_url or 'https://api.openai.com/v1'
         self.sample_rate = sample_rate
         self.max_files = max_files
 
@@ -175,7 +186,7 @@ class AIReviewer:
         rel_path = str(filepath.relative_to(root)) if root else str(filepath)
 
         # 1. Check for remaining untranslated CJK characters
-        from .detector import count_cjk_chars
+        from ..detector import count_cjk_chars
         for line_num, line in enumerate(translated.split('\n'), 1):
             cjk_count = count_cjk_chars(line)
             if cjk_count > 3:  # more than 3 CJK chars = likely untranslated
@@ -229,14 +240,14 @@ class AIReviewer:
         orig_short = original[:max_len] + ('...' if len(original) > max_len else '')
         trans_short = translated[:max_len] + ('...' if len(translated) > max_len else '')
 
-        prompt = f"""Review this translation from {self.source_lang} to English.
+        prompt = f"""Review this translation from {self.source_lang} to {self.target_lang}.
 
 ORIGINAL ({self.source_lang}):
 ```
 {orig_short}
 ```
 
-TRANSLATED (English):
+TRANSLATED ({self.target_lang}):
 ```
 {trans_short}
 ```

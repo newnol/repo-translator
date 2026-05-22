@@ -8,13 +8,23 @@ from .base import BaseTranslator
 
 logger = logging.getLogger(__name__)
 
-# Language code mapping
+# Language code mapping for googletrans (unofficial Google client).
 LANG_MAP = {
     'zh': 'zh-cn',
     'zh-cn': 'zh-cn',
     'zh-tw': 'zh-tw',
     'he': 'iw',
     'jv': 'jv',
+}
+
+# deep-translator is stricter about some Google language aliases/casing.
+DEEP_TRANSLATOR_LANG_MAP = {
+    'zh': 'zh-CN',
+    'zh-cn': 'zh-CN',
+    'zh-CN': 'zh-CN',
+    'zh-tw': 'zh-TW',
+    'zh-TW': 'zh-TW',
+    'he': 'iw',
 }
 
 
@@ -94,9 +104,15 @@ class DeepTranslator(BaseTranslator):
     def _init_translator(self):
         try:
             from deep_translator import GoogleTranslator as DTGoogle
-            self._translator = DTGoogle(source=self.source_lang, target=self.target_lang)
+            self._translator = DTGoogle(
+                source=self._get_lang_code(self.source_lang),
+                target=self._get_lang_code(self.target_lang),
+            )
         except ImportError:
             raise ImportError("deep-translator not installed. Run: pip install deep-translator")
+
+    def _get_lang_code(self, lang: str) -> str:
+        return DEEP_TRANSLATOR_LANG_MAP.get(lang, lang)
 
     @property
     def name(self) -> str:

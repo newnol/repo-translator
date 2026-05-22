@@ -1,10 +1,9 @@
 """Tests for repo-translator."""
 
 import pytest
-from pathlib import Path
 
 from repo_translator.detector import detect_language, has_cjk, count_cjk_chars, extract_translatable_text
-from repo_translator.file_filter import should_translate, get_translatable_files, TRANSLATABLE_EXTENSIONS
+from repo_translator.file_filter import should_translate, TRANSLATABLE_EXTENSIONS
 
 
 class TestDetector:
@@ -107,6 +106,11 @@ class TestTranslators:
         t = get_translator('google', 'zh', 'en')
         assert t.name == 'Google Translate'
 
+    def test_google_alt_accepts_zh_alias(self):
+        from repo_translator.translators import get_translator
+        t = get_translator('google-alt', 'zh', 'en')
+        assert t.name == 'Google Translate (deep-translator)'
+
     def test_unknown_engine(self):
         from repo_translator.translators import get_translator
         with pytest.raises(ValueError, match="Unknown engine"):
@@ -134,6 +138,174 @@ class TestCLI:
         result = runner.invoke(main, ['engines'])
         assert result.exit_code == 0
         assert 'google' in result.output
+
+    def test_cli_detect_local_repo_reports_cjk_percentage(self, runner, tmp_path):
+        from repo_translator.cli import main
+
+        readme = tmp_path / "README.md"
+        readme.write_text("# 标题\n\n这是中文文本，用于测试语言检测。", encoding="utf-8")
+
+        result = runner.invoke(main, ['detect', '--repo', str(tmp_path), '--sample', '1'])
+
+        assert result.exit_code == 0
+        assert 'CJK %' in result.output
+        assert 'README.md' in result.output
+
+    def test_cli_review_accepts_reviewer_alias(self, runner, tmp_path):
+        from repo_translator.cli import main
+
+        readme = tmp_path / "README.md"
+        readme.write_text("# Hello\n\nTranslated content.", encoding="utf-8")
+
+        result = runner.invoke(main, [
+            'review', '--dir', str(tmp_path), '--reviewer', 'openai', '--sample-rate', '0'
+        ])
+        assert result.exit_code == 0
+        assert 'Review Report' in result.output
+
+    def test_translate_preserves_broken_symlinks_when_copying(self, tmp_path):
+        from repo_translator.core import RepoTranslator
+
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "README.md").write_text("# 标题\n\n这是中文文本。", encoding="utf-8")
+        (source / "missing.pdf").symlink_to(tmp_path / "does-not-exist.pdf")
+
+        output = tmp_path / "translated"
+        output.mkdir()
+        (output / "stale.txt").write_text("old", encoding="utf-8")
+
+        translator = RepoTranslator(translator_engine='google-alt', dry_run=True)
+        result = translator.run(repo_dir=str(source), output_dir=str(output))
+
+        assert result['success'] is True
+        assert not (output / "stale.txt").exists()
+        copied_link = output / "missing.pdf"
+        assert copied_link.is_symlink()
+        assert not copied_link.exists()
+
+
+class TestProtectedTranslation:
+    """Regression tests for preserving repository structure while translating."""
+
+    class MangleProtectedTranslator:
+        name = "mangle-protected"
+
+        def translate_text(self, text):
+            return (
+                text.replace("使用说明", "Usage")
+                .replace("这是中文文本", "This is Chinese text")
+                .replace("你好", "Hello")
+                .replace("$x_t", "$release")
+                .replace("${expected}", "${value}")
+                .replace("https://example.com/docs", "https://example.com/translated-docs")
+                .replace("retain-pdf --help", "retain-pdf translated help")
+                .replace("## 1. Upload PDF", "```## 1. Upload PDF`")
+                .replace("。！？；", ".!?;")
+            )
+
+    def _translator(self):
+        from repo_translator.core import RepoTranslator
+
+        translator = RepoTranslator.__new__(RepoTranslator)
+        translator.translator = self.MangleProtectedTranslator()
+        return translator
+
+    def test_markdown_translation_preserves_code_inline_urls_and_placeholders(self):
+        translator = self._translator()
+        content = """# 使用说明
+
+Run `retain-pdf --help` and keep `${expected}`.
+Visit https://example.com/docs.
+
+```bash
+retain-pdf --help
+```
+
+这是中文文本。
+"""
+
+        translated = translator._translate_markdown(content)
+
+        assert "# Usage" in translated
+        assert "This is Chinese text" in translated
+        assert "`retain-pdf --help`" in translated
+        assert "${expected}" in translated
+        assert "https://example.com/docs" in translated
+        assert "retain-pdf translated help" not in translated
+        assert "https://example.com/translated-docs" not in translated
+
+    def test_json_translation_preserves_syntax_and_keys(self):
+        import json
+
+        translator = self._translator()
+        content = '{"message": "你好", "nested": {"keep_key": "你好 ${expected}"}}'
+
+        translated = translator._translate_json_content(content)
+        data = json.loads(translated)
+
+        assert sorted(data) == ["message", "nested"]
+        assert data["message"] == "Hello"
+        assert data["nested"]["keep_key"] == "Hello ${expected}"
+
+    def test_source_line_translation_preserves_placeholders_math_and_urls(self):
+        translator = self._translator()
+        lines = [
+            'assert render("$x_t") == f"${expected}"  # 这是中文文本 https://example.com/docs',
+        ]
+
+        translated = translator._translate_source_lines(lines)
+
+        assert "$x_t" in translated[0]
+        assert "${expected}" in translated[0]
+        assert "https://example.com/docs" in translated[0]
+        assert "$release" not in translated[0]
+        assert "${value}" not in translated[0]
+        assert "translated-docs" not in translated[0]
+        assert "This is Chinese text" in translated[0]
+
+    def test_markdown_translation_does_not_mutate_english_lines_in_cjk_file(self):
+        translator = self._translator()
+        content = """# 使用说明
+
+## 1. Upload PDF
+
+这是中文文本。
+"""
+
+        translated = translator._translate_markdown(content)
+
+        assert "# Usage" in translated
+        assert "## 1. Upload PDF" in translated
+        assert "```## 1. Upload PDF`" not in translated
+        assert "This is Chinese text" in translated
+
+    def test_source_line_translation_skips_cjk_punctuation_only_regex(self):
+        translator = self._translator()
+        line = r'SOURCE_TERMINAL_RE = re.compile(r"[.!?。！？；;:：)\]）】”’\"\']\s*$")'
+
+        translated = translator._translate_source_lines([line])
+
+        assert translated == [line]
+
+
+class TestReviewers:
+    """Test AI reviewer lightweight checks."""
+
+    def test_check_file_detects_untranslated_cjk(self, tmp_path):
+        from repo_translator.reviewers import AIReviewer
+
+        translated = tmp_path / "README.md"
+        translated.write_text("# Title\n\n这里还有未翻译的中文。", encoding="utf-8")
+
+        reviewer = AIReviewer(source_lang='zh', sample_rate=0, api_key='')
+        issues = reviewer._check_file(
+            translated,
+            translated.read_text(encoding="utf-8"),
+            root=tmp_path,
+        )
+
+        assert any(issue.issue_type == 'untranslated' for issue in issues)
 
 
 @pytest.fixture
