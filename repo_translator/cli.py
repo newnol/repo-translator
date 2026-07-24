@@ -34,7 +34,7 @@ def main(verbose):
 @click.option("--source-lang", "-s", default="zh", help="Source language (default: zh)")
 @click.option("--target-lang", "-t", default="en", help="Target language (default: en)")
 @click.option(
-    "--translator", default="google", help="Translation engine (google, deepl, openai, ollama)"
+    "--translator", default="google", help="Translation engine(s). Comma-separated for multi: 'libre,mymemory'"
 )
 @click.option(
     "--api-key", envvar="TRANSLATOR_API_KEY", default=None, help="API key for translation engine"
@@ -87,6 +87,9 @@ def main(verbose):
 @click.option(
     "--github-token", envvar="GITHUB_TOKEN", default=None, help="GitHub token for pushing"
 )
+@click.option(
+    "--workers", default=1, type=int, help="Parallel file workers. Use 4+ with libre or multi-engine"
+)
 @click.option("--dry-run", is_flag=True, help="Show what would be translated without doing it")
 def translate(
     repo,
@@ -114,6 +117,7 @@ def translate(
     verify_json_output,
     push_to,
     github_token,
+    workers,
     dry_run,
 ):
     """Translate a repository from one language to another."""
@@ -164,6 +168,7 @@ def translate(
         verify_json_output=verify_json_output,
         dry_run=dry_run,
         verbose=main.context_settings.get("verbose", False),
+        max_workers=workers,
     )
 
     # Run pipeline
@@ -355,6 +360,8 @@ def engines():
         "deepl": "$5.49/month (500K chars)",
         "openai": "~$0.01/1K chars",
         "ollama": "Free (local)",
+        "libre": "Free (self-hosted Docker)",
+        "mymemory": "Free (100K chars/day, no key needed)",
     }
 
     for name, desc in list_engines().items():

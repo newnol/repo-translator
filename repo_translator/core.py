@@ -35,6 +35,8 @@ PROTECTED_TOKEN_PATTERN = re.compile(
 
 CJK_IDEOGRAPH_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 
+STATE_FILE = ".repo-translator-state.json"
+
 
 def _has_cjk_ideograph(text: str) -> bool:
     """Return True only for real CJK word characters, not punctuation/forms."""
@@ -104,6 +106,7 @@ class RepoTranslator:
         include_patterns: List[str] = None,
         exclude_patterns: List[str] = None,
         batch_size: int = 40,
+        max_workers: int = 1,
         dry_run: bool = False,
         verbose: bool = False,
     ):
@@ -111,6 +114,7 @@ class RepoTranslator:
         self.target_lang = target_lang
         self.batch_size = batch_size
         self.dry_run = dry_run
+        self.max_workers = max_workers
         self.verbose = verbose
         self.verify = verify
         self.verify_ai = verify_ai
@@ -177,7 +181,12 @@ class RepoTranslator:
         try:
             # Step 1: Get source repo
             if repo_url:
-                source_dir = self.clone(repo_url, output_dir or "/tmp/repo-translate-source")
+                dest_path = Path(output_dir) if output_dir else None
+                if dest_path and (dest_path / STATE_FILE).exists():
+                    logger.info(f"Resuming: found existing state in {dest_path}")
+                    source_dir = dest_path
+                else:
+                    source_dir = self.clone(repo_url, output_dir or "/tmp/repo-translate-source")
             elif repo_dir:
                 source_dir = Path(repo_dir)
             else:
@@ -193,8 +202,14 @@ class RepoTranslator:
                 dest_dir = Path(output_dir)
                 if dest_dir != source_dir:
                     if dest_dir.exists():
-                        shutil.rmtree(dest_dir)
-                    shutil.copytree(source_dir, dest_dir, symlinks=True)
+                        state_file = dest_dir / STATE_FILE
+                        if state_file.exists():
+                            logger.info(f"Resuming: keeping existing output directory {dest_dir}")
+                        else:
+                            shutil.rmtree(dest_dir)
+                            shutil.copytree(source_dir, dest_dir, symlinks=True)
+                    else:
+                        shutil.copytree(source_dir, dest_dir, symlinks=True)
                 self.translate_in_place(dest_dir)
             else:
                 dest_dir = source_dir
@@ -282,6 +297,24 @@ class RepoTranslator:
 
         return self.translate_in_place(dest_dir)
 
+    def _load_state(self, directory: Path) -> set:
+        """Load set of already-translated file paths (relative) from state file."""
+        state_path = directory / STATE_FILE
+        if not state_path.exists():
+            return set()
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            return set(data.get("translated", []))
+        except (json.JSONDecodeError, KeyError):
+            logger.warning("Corrupt state file, starting fresh")
+            return set()
+
+    def _save_state(self, directory: Path, translated: set):
+        """Save translated file paths to state file."""
+        state_path = directory / STATE_FILE
+        data = {"translated": sorted(translated)}
+        state_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
     def translate_in_place(self, directory: Path) -> TranslationStats:
         """Translate files in-place."""
         self.stats = TranslationStats()
@@ -294,10 +327,19 @@ class RepoTranslator:
         )
         console.print(f"   Engine: [green]{self.translator.name}[/green]")
 
+        # Load resume state
+        translated_set = self._load_state(directory)
+        if translated_set:
+            console.print(f"   Resuming: [yellow]{len(translated_set)}[/yellow] files already translated")
+
         # Filter to only files that need translation
         to_translate = []
         for filepath in files:
             try:
+                rel = str(filepath.relative_to(directory))
+                if rel in translated_set:
+                    self.stats.skipped_files += 1
+                    continue
                 content = filepath.read_text(encoding="utf-8", errors="ignore")
                 if (
                     has_cjk(content)
@@ -314,23 +356,50 @@ class RepoTranslator:
 
         if not to_translate:
             console.print("   ⚠️  No files need translation!")
+            # Save state even if 0 to mark completion
+            self._save_state(directory, translated_set)
             return self.stats
 
-        # Translate with progress bar
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TextColumn("({task.completed}/{task.total})"),
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Translating...", total=len(to_translate))
+        # Translate files
+        total = len(to_translate)
+        if self.max_workers > 1 and total > 1:
+            console.print(f"   Workers: {self.max_workers}")
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            import threading
+            lock = threading.Lock()
 
-            for i in range(0, len(to_translate), self.batch_size):
-                batch = to_translate[i : i + self.batch_size]
-                self._translate_batch(batch, directory, progress, task)
+            def _process(filepath):
+                rel_path = str(filepath.relative_to(directory))
+                try:
+                    result = self._translate_one_file(filepath, directory)
+                except Exception as e:
+                    result = {"ok": False, "rel": rel_path, "error": str(e)}
+                with lock:
+                    translated_set.add(rel_path)
+                    self._save_state(directory, translated_set)
+                    done = len(translated_set)
+                    if done % 10 == 0 or done == total:
+                        console.print(f"   [{done}/{total}] Translated: {rel_path}")
+                return result
+
+            with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+                list(pool.map(_process, to_translate))
+
+            # Recalculate stats from state
+            self.stats.translated_files = len(translated_set)
+        else:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TextColumn("({task.completed}/{task.total})"),
+                TimeElapsedColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Translating...", total=total)
+                for filepath in to_translate:
+                    self._translate_one_file(filepath, directory, progress, task, translated_set)
 
         self.stats.end_time = datetime.now()
 
@@ -338,56 +407,70 @@ class RepoTranslator:
         console.print(f"\n{self.stats.summary()}")
         return self.stats
 
+    def _translate_one_file(self, filepath: Path, root: Path, progress=None, task=None, translated_set: set = None) -> dict:
+        """Translate a single file. Returns dict with translation stats.
+
+        Thread-safe: does not access shared state when progress/task/translated_set are None.
+        """
+        rel_path = str(filepath.relative_to(root))
+        try:
+            content = filepath.read_text(encoding="utf-8", errors="ignore")
+
+            from .detector import extract_translatable_text
+            translatable = extract_translatable_text(content, filepath.suffix)
+
+            if not translatable or len(translatable.strip()) < 5:
+                if progress:
+                    self.stats.skipped_files += 1
+                    progress.advance(task)
+                return {"ok": True, "rel": rel_path, "action": "skip"}
+
+            if self.dry_run:
+                logger.info(f"[DRY RUN] Would translate: {rel_path}")
+                if progress:
+                    progress.advance(task)
+                return {"ok": True, "rel": rel_path, "action": "dry-run"}
+
+            if filepath.suffix in (".md", ".markdown", ".rst", ".txt"):
+                translated = self._translate_markdown(content)
+                filepath.write_text(translated, encoding="utf-8")
+            elif filepath.suffix == ".json":
+                translated = self._translate_json_content(content)
+                filepath.write_text(translated, encoding="utf-8")
+            else:
+                translated_lines = self._translate_source_lines(content.split("\n"))
+                filepath.write_text("\n".join(translated_lines), encoding="utf-8")
+
+            if progress:
+                self.stats.translated_files += 1
+                progress.advance(task)
+
+            if translated_set is not None:
+                translated_set.add(rel_path)
+
+            return {"ok": True, "rel": rel_path, "action": "translated"}
+
+        except Exception as e:
+            logger.warning(f"Failed to translate {rel_path}: {e}")
+            if progress:
+                self.stats.failed_files += 1
+                progress.advance(task)
+            return {"ok": False, "rel": rel_path, "error": str(e)}
+
     def _translate_batch(
         self,
         files: List[Path],
         root: Path,
         progress: Progress,
         task,
+        translated_set: set = None,
     ):
-        """Translate a batch of files."""
+        """Translate a batch of files (sequential, for backward compatibility)."""
+        if translated_set is None:
+            translated_set = set()
         for filepath in files:
-            try:
-                rel_path = filepath.relative_to(root)
-                content = filepath.read_text(encoding="utf-8", errors="ignore")
-                self.stats.total_chars += len(content)
-
-                # Extract translatable text
-                from .detector import extract_translatable_text
-
-                translatable = extract_translatable_text(content, filepath.suffix)
-
-                if not translatable or len(translatable.strip()) < 5:
-                    self.stats.skipped_files += 1
-                    progress.advance(task)
-                    continue
-
-                # Translate
-                if self.dry_run:
-                    logger.info(f"[DRY RUN] Would translate: {rel_path}")
-                else:
-                    if filepath.suffix in (".md", ".markdown", ".rst", ".txt"):
-                        # Documentation: translate prose while preserving code/tokens.
-                        translated = self._translate_markdown(content)
-                        self.stats.translated_chars += len(translated)
-                        filepath.write_text(translated, encoding="utf-8")
-                    elif filepath.suffix == ".json":
-                        translated = self._translate_json_content(content)
-                        self.stats.translated_chars += len(translated)
-                        filepath.write_text(translated, encoding="utf-8")
-                    else:
-                        # Source code: translate line-by-line, only CJK lines
-                        translated_lines = self._translate_source_lines(content.split("\n"))
-                        self.stats.translated_chars += sum(len(line) for line in translated_lines)
-                        filepath.write_text("\n".join(translated_lines), encoding="utf-8")
-
-                self.stats.translated_files += 1
-
-            except Exception as e:
-                logger.warning(f"Failed to translate {rel_path}: {e}")
-                self.stats.failed_files += 1
-
-            progress.advance(task)
+            self._translate_one_file(filepath, root, progress, task, translated_set)
+            self._save_state(root, translated_set)
 
     def _translate_source_lines(self, lines: List[str]) -> List[str]:
         """
@@ -413,51 +496,76 @@ class RepoTranslator:
         if not batch_to_translate:
             return translated_lines
 
-        # Translate in batches
-        chunk_size = 20
-        for chunk_start in range(0, len(batch_to_translate), chunk_size):
-            chunk = batch_to_translate[chunk_start : chunk_start + chunk_size]
-            chunk_idx = batch_indices[chunk_start : chunk_start + chunk_size]
-            chunk_indent = batch_indents[chunk_start : chunk_start + chunk_size]
-
-            # Join with separator for context
+        # Chunk at 30 lines to keep request size manageable for self-hosted engines
+        MAX_LINES_PER_BATCH = 30
+        for chunk_start in range(0, len(batch_to_translate), MAX_LINES_PER_BATCH):
+            chunk = batch_to_translate[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
+            chunk_idx = batch_indices[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
+            chunk_indent = batch_indents[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
             joined = "\n|||SEP|||\n".join(chunk)
             try:
                 translated = self._translate_preserving_tokens(joined)
                 parts = translated.split("|||SEP|||")
-
                 for idx, part, indent in zip(chunk_idx, parts, chunk_indent):
                     cleaned = part.strip()
                     if cleaned:
-                        # Restore original indentation
                         translated_lines[idx] = " " * indent + cleaned
             except Exception as e:
                 logger.warning(f"Line translation failed: {e}")
-                # Keep original lines on failure
 
         return translated_lines
 
     def _translate_markdown(self, content: str) -> str:
-        """Translate markdown prose without touching code, URLs, or placeholders."""
-        translated_lines = []
+        """Translate markdown prose without touching code, URLs, or placeholders.
+        Batches all translatable lines into a single API call for speed.
+        """
+        lines = content.splitlines(keepends=True)
         in_fence = False
+        is_cjk_source = getattr(self, "source_lang", "zh") in ("zh", "ja", "ko")
 
-        for line in content.splitlines(keepends=True):
+        # Collect lines to translate; leave placeholders for non-translatable ones
+        batch_indices = []   # positions in result list
+        batch_bodies = []    # line bodies (without trailing newline)
+        result = []          # placeholder: None for lines to translate, str for kept-as-is
+
+        for line in lines:
             stripped = line.lstrip()
             if stripped.startswith("```"):
-                translated_lines.append(line)
+                result.append(line)
                 in_fence = not in_fence
                 continue
 
-            if in_fence or not _has_cjk_ideograph(line):
-                translated_lines.append(line)
+            if in_fence:
+                result.append(line)
+                continue
+
+            # CJK source: skip non-CJK lines (they're likely already in target language)
+            if is_cjk_source and not _has_cjk_ideograph(line):
+                result.append(line)
                 continue
 
             line_body = line[:-1] if line.endswith("\n") else line
-            newline = "\n" if line.endswith("\n") else ""
-            translated_lines.append(self._translate_preserving_tokens(line_body) + newline)
+            # Don't translate yet — batch it
+            batch_indices.append(len(result))
+            batch_bodies.append(line_body)
+            result.append(None)  # placeholder, filled after batch translate
 
-        return "".join(translated_lines)
+        if not batch_indices:
+            return content
+
+        # Chunk at 30 lines to keep request size manageable
+        MAX_LINES_PER_BATCH = 30
+        for chunk_start in range(0, len(batch_indices), MAX_LINES_PER_BATCH):
+            chunk_idx = batch_indices[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
+            chunk_bodies = batch_bodies[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
+            joined = "\n|||SEP|||\n".join(chunk_bodies)
+            translated_joined = self._translate_preserving_tokens(joined)
+            parts = translated_joined.split("|||SEP|||")
+            for idx, part in zip(chunk_idx, parts):
+                cleaned = part.strip()
+                result[idx] = (cleaned if cleaned else "") + "\n"
+
+        return "".join(result)
 
     def _translate_json_content(self, content: str) -> str:
         """Translate JSON string values while preserving keys and valid JSON syntax."""
@@ -500,7 +608,12 @@ class RepoTranslator:
         """Translate a non-protected text span, keeping blank spans byte-for-byte."""
         if not text.strip():
             return text
-        return self.translator.translate_text(text)
+        # Retry once on transient failures (timeout, connection error)
+        try:
+            return self.translator.translate_text(text)
+        except Exception as e:
+            logger.warning(f"Retry after error: {e}")
+            return self.translator.translate_text(text)
 
     def _apply_translation(self, original: str, translated: str, suffix: str) -> str:
         """

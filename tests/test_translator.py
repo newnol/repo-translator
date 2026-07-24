@@ -125,6 +125,26 @@ class TestTranslators:
         with pytest.raises(ValueError, match="Unknown engine"):
             get_translator("unknown", "zh", "en")
 
+    def test_libre_translator_init(self):
+        from repo_translator.translators import get_translator
+
+        t = get_translator("libre", "zh", "en")
+        assert t.name == "LibreTranslate"
+
+    def test_mymemory_translator_init(self):
+        from repo_translator.translators import get_translator
+
+        t = get_translator("mymemory", "zh", "en", api_key="test-key")
+        assert t.name == "MyMemory"
+
+    def test_multi_translator(self):
+        from repo_translator.translators import get_translator
+
+        t = get_translator("google,google-alt", "zh", "en")
+        assert "+" in t.name
+        assert "Google Translate" in t.name
+        assert len(t.translators) == 2
+
     def test_chunk_text(self):
         from repo_translator.translators.base import BaseTranslator
 
