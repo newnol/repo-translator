@@ -48,7 +48,7 @@ jobs:
           for port in 5000 5001; do
             docker run -d --name libre-$port \
               -p $port:5000 \
-              -v /tmp/lt-models:/app/.local/share/argos-translate/packages \
+              -v /tmp/lt-models:/home/libretranslate/.local/share/argos-translate \
               libretranslate/libretranslate:latest
           done
 
