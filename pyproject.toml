@@ -33,3 +33,7 @@ target-version = ["py39"]
 
 [tool.ruff]
 line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+ignore = ["BLE001", "DTZ005", "PIE810", "RUF013", "SIM115", "S110", "UP035", "F401"]

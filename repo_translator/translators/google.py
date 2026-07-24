@@ -1,8 +1,7 @@
 """Google Translate engine (free tier: 500K chars/month)."""
 
-import time
 import logging
-from typing import List
+import time
 
 from .base import BaseTranslator
 
@@ -83,7 +82,7 @@ class GoogleTranslator(BaseTranslator):
 
         return "\n".join(translated_chunks)
 
-    def translate_batch(self, texts: List[str]) -> List[str]:
+    def translate_batch(self, texts: list[str]) -> list[str]:
         """Batch translate with rate limiting."""
         results = []
         for i, text in enumerate(texts):

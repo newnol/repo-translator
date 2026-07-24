@@ -1,22 +1,24 @@
 """Core translation pipeline."""
 
+from __future__ import annotations
+
+import json
+import logging
 import os
 import re
-import json
 import shutil
-import logging
-from pathlib import Path
-from typing import Any, Dict, List
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from .detector import has_cjk
 from .file_filter import get_translatable_files
-from .translators import get_translator
 from .reviewers import AIReviewer, ReviewReport
+from .translators import get_translator
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -85,26 +87,26 @@ class RepoTranslator:
         source_lang: str = "zh",
         target_lang: str = "en",
         translator_engine: str = "google",
-        translator_api_key: str = None,
-        translator_model: str = None,
-        translator_base_url: str = None,
-        review_engine: str = None,
-        review_api_key: str = None,
+        translator_api_key: str | None = None,
+        translator_model: str | None = None,
+        translator_base_url: str | None = None,
+        review_engine: str | None = None,
+        review_api_key: str | None = None,
         review_model: str = "gpt-4o-mini",
-        review_base_url: str = None,
+        review_base_url: str | None = None,
         review_sample_rate: float = 0.15,
         verify: bool = False,
         verify_ai: bool = False,
         verify_engine: str = "vercel-ai-gateway",
-        verify_api_key: str = None,
+        verify_api_key: str | None = None,
         verify_model: str = "openai/gpt-4o-mini",
-        verify_base_url: str = None,
+        verify_base_url: str | None = None,
         verify_sample_rate: float = 0.15,
         verify_max_ai_files: int = 20,
         verify_fail_on: str = "error",
-        verify_json_output: str = None,
-        include_patterns: List[str] = None,
-        exclude_patterns: List[str] = None,
+        verify_json_output: str | None = None,
+        include_patterns: list[str] | None = None,
+        exclude_patterns: list[str] | None = None,
         batch_size: int = 40,
         max_workers: int = 1,
         dry_run: bool = False,
@@ -154,12 +156,12 @@ class RepoTranslator:
 
     def run(
         self,
-        repo_url: str = None,
-        repo_dir: str = None,
-        output_dir: str = None,
-        push_to: str = None,
-        github_token: str = None,
-    ) -> Dict:
+        repo_url: str | None = None,
+        repo_dir: str | None = None,
+        output_dir: str | None = None,
+        push_to: str | None = None,
+        github_token: str | None = None,
+    ) -> dict:
         """
         Run the full translation pipeline.
 
@@ -330,7 +332,9 @@ class RepoTranslator:
         # Load resume state
         translated_set = self._load_state(directory)
         if translated_set:
-            console.print(f"   Resuming: [yellow]{len(translated_set)}[/yellow] files already translated")
+            console.print(
+                f"   Resuming: [yellow]{len(translated_set)}[/yellow] files already translated"
+            )
 
         # Filter to only files that need translation
         to_translate = []
@@ -364,8 +368,9 @@ class RepoTranslator:
         total = len(to_translate)
         if self.max_workers > 1 and total > 1:
             console.print(f"   Workers: {self.max_workers}")
-            from concurrent.futures import ThreadPoolExecutor, as_completed
             import threading
+            from concurrent.futures import ThreadPoolExecutor
+
             lock = threading.Lock()
 
             def _process(filepath):
@@ -375,7 +380,8 @@ class RepoTranslator:
                 except Exception as e:
                     result = {"ok": False, "rel": rel_path, "error": str(e)}
                 with lock:
-                    translated_set.add(rel_path)
+                    if result.get("ok"):
+                        translated_set.add(rel_path)
                     self._save_state(directory, translated_set)
                     done = len(translated_set)
                     if done % 10 == 0 or done == total:
@@ -400,6 +406,7 @@ class RepoTranslator:
                 task = progress.add_task("Translating...", total=total)
                 for filepath in to_translate:
                     self._translate_one_file(filepath, directory, progress, task, translated_set)
+                    self._save_state(directory, translated_set)
 
         self.stats.end_time = datetime.now()
 
@@ -407,7 +414,14 @@ class RepoTranslator:
         console.print(f"\n{self.stats.summary()}")
         return self.stats
 
-    def _translate_one_file(self, filepath: Path, root: Path, progress=None, task=None, translated_set: set = None) -> dict:
+    def _translate_one_file(
+        self,
+        filepath: Path,
+        root: Path,
+        progress=None,
+        task=None,
+        translated_set: set | None = None,
+    ) -> dict:
         """Translate a single file. Returns dict with translation stats.
 
         Thread-safe: does not access shared state when progress/task/translated_set are None.
@@ -417,6 +431,7 @@ class RepoTranslator:
             content = filepath.read_text(encoding="utf-8", errors="ignore")
 
             from .detector import extract_translatable_text
+
             translatable = extract_translatable_text(content, filepath.suffix)
 
             if not translatable or len(translatable.strip()) < 5:
@@ -459,11 +474,11 @@ class RepoTranslator:
 
     def _translate_batch(
         self,
-        files: List[Path],
+        files: list[Path],
         root: Path,
         progress: Progress,
         task,
-        translated_set: set = None,
+        translated_set: set | None = None,
     ):
         """Translate a batch of files (sequential, for backward compatibility)."""
         if translated_set is None:
@@ -472,7 +487,7 @@ class RepoTranslator:
             self._translate_one_file(filepath, root, progress, task, translated_set)
             self._save_state(root, translated_set)
 
-    def _translate_source_lines(self, lines: List[str]) -> List[str]:
+    def _translate_source_lines(self, lines: list[str]) -> list[str]:
         """
         Translate source code line-by-line.
         Only translates lines containing CJK characters (comments, strings, docstrings).
@@ -524,9 +539,9 @@ class RepoTranslator:
         is_cjk_source = getattr(self, "source_lang", "zh") in ("zh", "ja", "ko")
 
         # Collect lines to translate; leave placeholders for non-translatable ones
-        batch_indices = []   # positions in result list
-        batch_bodies = []    # line bodies (without trailing newline)
-        result = []          # placeholder: None for lines to translate, str for kept-as-is
+        batch_indices = []  # positions in result list
+        batch_bodies = []  # line bodies (without trailing newline)
+        result = []  # placeholder: None for lines to translate, str for kept-as-is
 
         for line in lines:
             stripped = line.lstrip()
@@ -544,7 +559,7 @@ class RepoTranslator:
                 result.append(line)
                 continue
 
-            line_body = line[:-1] if line.endswith("\n") else line
+            line_body = line.removesuffix("\n")
             # Don't translate yet — batch it
             batch_indices.append(len(result))
             batch_bodies.append(line_body)
@@ -652,7 +667,7 @@ class RepoTranslator:
         console.print(report.summary())
         return report
 
-    def push(self, directory: Path, repo_name: str, token: str = None) -> str:
+    def push(self, directory: Path, repo_name: str, token: str | None = None) -> str:
         """Push translated files to GitHub."""
         import git
 

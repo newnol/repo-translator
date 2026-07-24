@@ -1,13 +1,16 @@
 """Translator registry and factory."""
 
-from .base import BaseTranslator
-from .google import GoogleTranslator, DeepTranslator
-from .deepl import DeepLTranslator
-from .llm import LLMTranslator, OllamaTranslator
-from .libre import LibreTranslate
-from .mymemory import MyMemory
-from .multi import MultiTranslator
+from __future__ import annotations
 
+from typing import Optional
+
+from .base import BaseTranslator
+from .deepl import DeepLTranslator
+from .google import DeepTranslator, GoogleTranslator
+from .libre import LibreTranslate
+from .llm import LLMTranslator, OllamaTranslator
+from .multi import MultiTranslator
+from .mymemory import MyMemory
 
 ENGINES = {
     "google": GoogleTranslator,
@@ -24,9 +27,9 @@ def _build_single(
     engine: str,
     source_lang: str,
     target_lang: str,
-    api_key: str = None,
-    model: str = None,
-    base_url: str = None,
+    api_key: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
 ) -> BaseTranslator:
     """Build a single translator by engine name."""
     engine = engine.strip()
@@ -42,7 +45,8 @@ def _build_single(
 
     elif engine == "openai":
         return LLMTranslator(
-            source_lang, target_lang,
+            source_lang,
+            target_lang,
             api_key=api_key,
             model=model or "gpt-4o-mini",
             base_url=base_url or "https://api.openai.com/v1",
@@ -50,7 +54,8 @@ def _build_single(
 
     elif engine == "ollama":
         return OllamaTranslator(
-            source_lang, target_lang,
+            source_lang,
+            target_lang,
             model=model or "llama3.1",
             base_url=base_url or "http://localhost:11434",
         )
@@ -70,9 +75,9 @@ def get_translator(
     engine: str,
     source_lang: str,
     target_lang: str,
-    api_key: str = None,
-    model: str = None,
-    base_url: str = None,
+    api_key: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
 ) -> BaseTranslator:
     """
     Factory function to create a translator.

@@ -1,9 +1,10 @@
 """DeepL Translate engine (best quality, $5.49/month for 500K chars)."""
 
+from __future__ import annotations
+
+import logging
 import os
 import time
-import logging
-from typing import List
 
 from .base import BaseTranslator
 
@@ -30,7 +31,7 @@ DEEPL_LANG_MAP = {
 class DeepLTranslator(BaseTranslator):
     """DeepL Translate via official API."""
 
-    def __init__(self, source_lang: str, target_lang: str, api_key: str = None):
+    def __init__(self, source_lang: str, target_lang: str, api_key: str | None = None):
         super().__init__(source_lang, target_lang)
         self.api_key = api_key or os.environ.get("DEEPL_API_KEY", "")
         if not self.api_key:
@@ -95,7 +96,7 @@ class DeepLTranslator(BaseTranslator):
 
         return "\n".join(translated_chunks)
 
-    def translate_batch(self, texts: List[str]) -> List[str]:
+    def translate_batch(self, texts: list[str]) -> list[str]:
         """Batch translate — DeepL supports multiple texts in one request."""
         import requests
 

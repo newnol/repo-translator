@@ -1,14 +1,16 @@
 """AI-based translation quality review."""
 
-import os
-import re
+from __future__ import annotations
+
 import json
-import time
-import random
 import logging
-from pathlib import Path
-from typing import List
+import os
+import random
+import re
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ class ReviewReport:
 
     files_reviewed: int = 0
     total_issues: int = 0
-    issues: List[ReviewIssue] = field(default_factory=list)
+    issues: list[ReviewIssue] = field(default_factory=list)
     score: float = 100.0  # 0-100 quality score
 
     def add_issue(self, issue: ReviewIssue):
@@ -97,9 +99,9 @@ class AIReviewer:
         source_lang: str = "zh",
         target_lang: str = "en",
         engine: str = "openai",
-        api_key: str = None,
+        api_key: str | None = None,
         model: str = "gpt-4o-mini",
-        base_url: str = None,
+        base_url: str | None = None,
         sample_rate: float = 0.15,
         max_files: int = 50,
     ):
@@ -124,8 +126,8 @@ class AIReviewer:
     def review(
         self,
         translated_dir: Path,
-        original_dir: Path = None,
-        files: List[Path] = None,
+        original_dir: Path | None = None,
+        files: list[Path] | None = None,
     ) -> ReviewReport:
         """
         Review translated files for quality issues.
@@ -167,7 +169,7 @@ class AIReviewer:
 
         return report
 
-    def _select_sample(self, directory: Path) -> List[Path]:
+    def _select_sample(self, directory: Path) -> list[Path]:
         """Select a random sample of files for review."""
         from ..file_filter import get_translatable_files
 
@@ -182,9 +184,9 @@ class AIReviewer:
         self,
         filepath: Path,
         translated: str,
-        original: str = None,
-        root: Path = None,
-    ) -> List[ReviewIssue]:
+        original: str | None = None,
+        root: Path | None = None,
+    ) -> list[ReviewIssue]:
         """Check a single file for translation issues."""
         issues = []
         rel_path = str(filepath.relative_to(root)) if root else str(filepath)
@@ -236,7 +238,7 @@ class AIReviewer:
         original: str,
         translated: str,
         rel_path: str,
-    ) -> List[ReviewIssue]:
+    ) -> list[ReviewIssue]:
         """Use LLM for deep quality review of a translation."""
         import requests
 

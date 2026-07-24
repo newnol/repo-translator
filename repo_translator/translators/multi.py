@@ -1,7 +1,6 @@
 """Multi-translator: combine several engines for higher throughput."""
 
 import logging
-from typing import List
 
 from .base import BaseTranslator
 
@@ -15,7 +14,7 @@ class MultiTranslator(BaseTranslator):
     Combine with --workers N for full concurrent throughput.
     """
 
-    def __init__(self, translators: List[BaseTranslator]):
+    def __init__(self, translators: list[BaseTranslator]):
         super().__init__(
             translators[0].source_lang if translators else "",
             translators[0].target_lang if translators else "",
@@ -39,6 +38,6 @@ class MultiTranslator(BaseTranslator):
         self._index += 1
         return t.translate_text(text)
 
-    def translate_batch(self, texts: List[str]) -> List[str]:
+    def translate_batch(self, texts: list[str]) -> list[str]:
         """Batch translate with round-robin per text."""
         return [self.translate_text(t) for t in texts]

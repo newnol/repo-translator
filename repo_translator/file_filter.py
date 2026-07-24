@@ -1,7 +1,6 @@
 """File classification and filtering."""
 
 from pathlib import Path
-from typing import List
 
 # File extensions that contain translatable text
 TRANSLATABLE_EXTENSIONS = {
@@ -76,7 +75,6 @@ TRANSLATABLE_EXTENSIONS = {
     # Localization
     ".po",
     ".pot",
-    ".mo",
 }
 
 # Extensions to NEVER translate (binary / compiled)
@@ -134,6 +132,7 @@ BINARY_EXTENSIONS = {
     ".class",
     ".jar",
     ".war",
+    ".mo",
 }
 
 # Directories to skip entirely
@@ -229,7 +228,7 @@ def should_translate(filepath: Path, root: Path) -> bool:
     return True
 
 
-def get_translatable_files(root: Path) -> List[Path]:
+def get_translatable_files(root: Path) -> list[Path]:
     """Get all files that should be translated in a directory."""
     files = []
     for filepath in root.rglob("*"):

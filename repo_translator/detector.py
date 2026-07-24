@@ -1,11 +1,11 @@
 """Language detection utilities."""
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
-from typing import Optional
 
-from langdetect import detect, detect_langs, LangDetectException
-
+from langdetect import LangDetectException, detect, detect_langs
 
 # Unicode ranges for CJK detection
 CJK_RANGES = [
@@ -46,7 +46,7 @@ def count_cjk_chars(text: str) -> int:
     return count
 
 
-def detect_language(text: str) -> Optional[str]:
+def detect_language(text: str) -> str | None:
     """
     Detect the primary language of text.
     Returns ISO 639-1 code (e.g., 'zh', 'ja', 'ko', 'en') or None.
@@ -73,7 +73,7 @@ def detect_language(text: str) -> Optional[str]:
         return None
 
 
-def detect_file_language(filepath: Path) -> Optional[str]:
+def detect_file_language(filepath: Path) -> str | None:
     """
     Detect language of translatable content in a file.
     Extracts text content, skips code/comments markers, then detects.

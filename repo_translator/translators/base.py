@@ -1,7 +1,6 @@
 """Base translator interface."""
 
 from abc import ABC, abstractmethod
-from typing import List
 
 
 class BaseTranslator(ABC):
@@ -16,7 +15,7 @@ class BaseTranslator(ABC):
         """Translate a single text string."""
         ...
 
-    def translate_batch(self, texts: List[str]) -> List[str]:
+    def translate_batch(self, texts: list[str]) -> list[str]:
         """Translate a batch of texts. Default: sequential."""
         return [self.translate_text(t) for t in texts]
 
@@ -38,7 +37,7 @@ class BaseTranslator(ABC):
         code_lines = sum(1 for line in lines if any(ind in line for ind in code_indicators))
         return len(lines) > 3 and code_lines / len(lines) > 0.7
 
-    def _chunk_text(self, text: str, max_chars: int = 4500) -> List[str]:
+    def _chunk_text(self, text: str, max_chars: int = 4500) -> list[str]:
         """Split text into chunks for translation, respecting line boundaries."""
         if len(text) <= max_chars:
             return [text]

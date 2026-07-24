@@ -1,13 +1,16 @@
 """Repository equivalence verification after translation."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import re
 import xml.etree.ElementTree as ET
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Callable
 
 import yaml
 
@@ -62,7 +65,7 @@ class EquivalenceIssue:
     source: str = ""
     target: str = ""
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> dict[str, str]:
         return {
             "file": self.file,
             "type": self.issue_type,
@@ -84,7 +87,7 @@ class EquivalenceReport:
     common_files: int = 0
     files_checked: int = 0
     ai_files_reviewed: int = 0
-    issues: List[EquivalenceIssue] = field(default_factory=list)
+    issues: list[EquivalenceIssue] = field(default_factory=list)
 
     def add_issue(self, issue: EquivalenceIssue):
         self.issues.append(issue)
@@ -105,7 +108,7 @@ class EquivalenceReport:
         threshold = SEVERITY_RANK[fail_on]
         return any(SEVERITY_RANK.get(issue.severity, 0) >= threshold for issue in self.issues)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "source_dir": self.source_dir,
             "target_dir": self.target_dir,
@@ -138,7 +141,7 @@ class EquivalenceReport:
             lines.append("   ✅ Source and target look equivalent by configured checks.")
             return "\n".join(lines)
 
-        by_type: Dict[str, List[EquivalenceIssue]] = {}
+        by_type: dict[str, list[EquivalenceIssue]] = {}
         for issue in self.issues:
             by_type.setdefault(issue.issue_type, []).append(issue)
 
@@ -157,9 +160,9 @@ def verify_equivalence(
     target_dir: Path,
     ai_check: bool = False,
     ai_engine: str = "vercel-ai-gateway",
-    ai_api_key: Optional[str] = None,
+    ai_api_key: str | None = None,
     ai_model: str = "openai/gpt-4o-mini",
-    ai_base_url: Optional[str] = None,
+    ai_base_url: str | None = None,
     source_lang: str = "zh",
     target_lang: str = "en",
     sample_rate: float = 0.15,
@@ -226,11 +229,11 @@ def verify_equivalence(
     return report
 
 
-def _file_manifest(root: Path) -> Dict[str, Path]:
+def _file_manifest(root: Path) -> dict[str, Path]:
     if not root.exists():
         return {}
 
-    files: Dict[str, Path] = {}
+    files: dict[str, Path] = {}
     for path in root.rglob("*"):
         if path.is_dir():
             continue
@@ -315,7 +318,7 @@ def _check_syntax(source_path: Path, target_path: Path, rel_path: str, report: E
         )
 
 
-def _parser_for_suffix(suffix: str) -> Optional[Callable[[Path], object]]:
+def _parser_for_suffix(suffix: str) -> Callable[[Path], object] | None:
     if suffix == ".json":
         return lambda path: json.loads(path.read_text(encoding="utf-8"))
     if suffix in {".yaml", ".yml"}:
@@ -398,7 +401,7 @@ def _check_invariants(
             )
 
 
-def _markdown_code_blocks(text: str) -> List[str]:
+def _markdown_code_blocks(text: str) -> list[str]:
     return re.findall(r"```[^\n]*\n(.*?)```", text, flags=re.DOTALL)
 
 
@@ -408,9 +411,9 @@ def _run_ai_equivalence_review(
     target_dir: Path,
     common_paths: Iterable[str],
     ai_engine: str,
-    ai_api_key: Optional[str],
+    ai_api_key: str | None,
     ai_model: str,
-    ai_base_url: Optional[str],
+    ai_base_url: str | None,
     source_lang: str,
     target_lang: str,
     sample_rate: float,
@@ -453,7 +456,7 @@ def _run_ai_equivalence_review(
         )
 
 
-def _select_ai_files(files: List[Path], sample_rate: float, max_files: int) -> List[Path]:
+def _select_ai_files(files: list[Path], sample_rate: float, max_files: int) -> list[Path]:
     if not files:
         return []
     if sample_rate <= 0:

@@ -41,7 +41,9 @@ class MyMemory(BaseTranslator):
                 params["key"] = self.api_key
 
             try:
-                r = requests.get("https://api.mymemory.translated.net/get", params=params, timeout=15)
+                r = requests.get(
+                    "https://api.mymemory.translated.net/get", params=params, timeout=15
+                )
                 body = r.json()
                 translated.append(body["responseData"]["translatedText"])
             except Exception as e:

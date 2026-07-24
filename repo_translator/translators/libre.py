@@ -1,7 +1,6 @@
 """LibreTranslate engine (self-hosted, no rate limits)."""
 
 import logging
-from typing import List
 
 from .base import BaseTranslator
 

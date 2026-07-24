@@ -1,18 +1,18 @@
 """CLI interface for repo-translator."""
 
-import sys
-import click
 import logging
+import sys
 from pathlib import Path
 
+import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from .core import RepoTranslator
-from .translators import list_engines
-from .detector import detect_file_language, count_cjk_chars
+from .detector import count_cjk_chars, detect_file_language
 from .file_filter import get_translatable_files
+from .translators import list_engines
 
 console = Console()
 
@@ -34,7 +34,9 @@ def main(verbose):
 @click.option("--source-lang", "-s", default="zh", help="Source language (default: zh)")
 @click.option("--target-lang", "-t", default="en", help="Target language (default: en)")
 @click.option(
-    "--translator", default="google", help="Translation engine(s). Comma-separated for multi: 'libre,mymemory'"
+    "--translator",
+    default="google",
+    help="Translation engine(s). Comma-separated for multi: 'libre,mymemory'",
 )
 @click.option(
     "--api-key", envvar="TRANSLATOR_API_KEY", default=None, help="API key for translation engine"
@@ -88,7 +90,10 @@ def main(verbose):
     "--github-token", envvar="GITHUB_TOKEN", default=None, help="GitHub token for pushing"
 )
 @click.option(
-    "--workers", default=1, type=int, help="Parallel file workers. Use 4+ with libre or multi-engine"
+    "--workers",
+    default=1,
+    type=int,
+    help="Parallel file workers. Use 4+ with libre or multi-engine",
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be translated without doing it")
 def translate(
@@ -134,7 +139,7 @@ def translate(
 
     # Auto-detect output dir
     if output_dir is None:
-        if repo.startswith("http") or repo.startswith("git@"):
+        if repo.startswith(("http", "git@")):
             repo_name = repo.rstrip("/").split("/")[-1].replace(".git", "")
             output_dir = f"./{repo_name}-translated"
         else:
@@ -173,8 +178,8 @@ def translate(
 
     # Run pipeline
     result = translator_obj.run(
-        repo_url=repo if repo.startswith("http") or repo.startswith("git@") else None,
-        repo_dir=repo if not (repo.startswith("http") or repo.startswith("git@")) else None,
+        repo_url=repo if repo.startswith(("http", "git@")) else None,
+        repo_dir=repo if not (repo.startswith(("http", "git@"))) else None,
         output_dir=output_dir,
         push_to=push_to,
         github_token=github_token,
@@ -199,8 +204,9 @@ def translate(
 @click.option("--sample", "-n", default=20, help="Number of files to sample")
 def detect(repo, sample):
     """Detect languages in a repository."""
-    if repo.startswith("http") or repo.startswith("git@"):
+    if repo.startswith(("http", "git@")):
         import tempfile
+
         import git
 
         tmpdir = tempfile.mkdtemp()
@@ -319,6 +325,7 @@ def verify(
 ):
     """Verify that a translated repo remains technically equivalent to the source."""
     import json
+
     from .equivalence import verify_equivalence
 
     report = verify_equivalence(

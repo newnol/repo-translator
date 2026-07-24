@@ -1,8 +1,10 @@
 """LLM-based translation engines (OpenAI, Anthropic, Ollama)."""
 
+from __future__ import annotations
+
+import logging
 import os
 import time
-import logging
 
 from .base import BaseTranslator
 
@@ -16,7 +18,7 @@ class LLMTranslator(BaseTranslator):
         self,
         source_lang: str,
         target_lang: str,
-        api_key: str = None,
+        api_key: str | None = None,
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
         temperature: float = 0.3,

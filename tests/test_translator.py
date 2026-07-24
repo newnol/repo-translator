@@ -3,12 +3,12 @@
 import pytest
 
 from repo_translator.detector import (
-    detect_language,
-    has_cjk,
     count_cjk_chars,
+    detect_language,
     extract_translatable_text,
+    has_cjk,
 )
-from repo_translator.file_filter import should_translate, TRANSLATABLE_EXTENSIONS
+from repo_translator.file_filter import TRANSLATABLE_EXTENSIONS, should_translate
 
 
 class TestDetector:
