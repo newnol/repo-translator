@@ -1,0 +1,80 @@
+name: Translate retain-pdf (zh→en comments)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'  # weekly Sunday midnight
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+
+    services:
+      libretranslate:
+        image: libretranslate/libretranslate:latest
+        ports:
+          - 5000:5000
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo-translator
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install repo-translator
+        run: |
+          cd repo-translator
+          pip install -e .
+
+      - name: Wait for LibreTranslate
+        run: |
+          echo "Waiting for LibreTranslate..."
+          for i in $(seq 30); do
+            if curl -sf http://localhost:5000/languages >/dev/null 2>&1; then
+              echo "LibreTranslate ready"
+              break
+            fi
+            echo "Attempt $i: not ready yet, sleeping 10s..."
+            sleep 10
+          done
+
+      - name: Clone retain-pdf
+        run: git clone https://github.com/wxyhgk/retain-pdf.git
+
+      - name: Translate code comments
+        run: |
+          cd repo-translator
+          repo-translator translate \
+            --repo ../retain-pdf \
+            --source-lang zh \
+            --target-lang en \
+            --translator libre \
+            --base-url http://localhost:5000 \
+            --output-dir ../retain-pdf-en \
+            --translate-code \
+            --code-scope comments \
+            --include 'backend/**/*.py' \
+            --include 'backend/**/*.rs' \
+            --include 'frontend/**/*.ts' \
+            --include 'frontend/**/*.tsx' \
+            --include 'frontend-react/**/*.ts' \
+            --include 'frontend-react/**/*.tsx' \
+            --exclude '**/tests/**' \
+            --exclude '**/*.test.*' \
+            --exclude '**/fixtures/**' \
+            --workers 4 \
+            --batch-size 40
+
+      - name: Upload translated code
+        uses: actions/upload-artifact@v4
+        with:
+          name: retain-pdf-en
+          path: retain-pdf-en/
