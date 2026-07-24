@@ -41,7 +41,9 @@ PROTECTED_TOKEN_PATTERN = re.compile(
 
 CJK_IDEOGRAPH_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 QUOTED_STRING_PATTERN = re.compile(
-    r'"(?P<double>(?:\\.|[^"\\])*)"|\'(?P<single>(?:\\.|[^\'\\])*)\''
+    r'"(?P<double>(?:\\.|[^"\\])*)"'
+    r"|'(?P<single>(?:\\.|[^'\\])*)'"
+    r'|`(?P<backtick>(?:\\.|[^`\\$])*)`'
 )
 
 STATE_FILE = ".repo-translator-state.json"
@@ -802,6 +804,7 @@ class RepoTranslator:
             r"^(?P<prefix>\s*/\*+\s*)(?P<body>.*?)(?P<suffix>\s*\*/\s*)$",
             r"^(?P<prefix>\s*<!--\s*)(?P<body>.*?)(?P<suffix>\s*-->\s*)$",
             r"^(?P<prefix>\s*\*+\s*)(?P<body>.*?)(?P<suffix>\s*)$",
+            r"^(?P<prefix>\s*\{\s*/\*+\s*)(?P<body>.*?)(?P<suffix>\s*\*/\}\s*)$",  # JSX {/* … */}
         ):
             match = re.match(pattern, line)
             if match and _has_cjk_ideograph(match.group("body")):
@@ -840,17 +843,22 @@ class RepoTranslator:
 
         replacements: list[tuple[int, int, str]] = []
 
-        # Quoted values. Backtick/template strings are deliberately skipped because
-        # interpolation makes safe reconstruction language-specific.
+        # Quoted values, including backtick template literals.
+        # Template interpolation ${…} is safe because translate_preserving
+        # extracts it as markers before sending the body to the translator.
         for match in QUOTED_STRING_PATTERN.finditer(line):
-            group_name = "double" if match.group("double") is not None else "single"
+            if match.group("double") is not None:
+                group_name, quote = "double", '"'
+            elif match.group("single") is not None:
+                group_name, quote = "single", "'"
+            else:
+                group_name, quote = "backtick", "`"
             body = match.group(group_name)
             if not _has_cjk_ideograph(body):
                 continue
             translated = self._translate_preserving_tokens(body, translate_span=translate_span)
-            quote = '"' if group_name == "double" else "'"
             if "__REPO_TRANSLATOR_SPAN_" in translated:
-                tag = "DOUBLE" if quote == '"' else "SINGLE"
+                tag = {"double": "DOUBLE", "single": "SINGLE", "backtick": "BACKTICK"}[group_name]
                 translated = re.sub(
                     r"(__REPO_TRANSLATOR_SPAN_\d{8}__)",
                     rf"\1__QUOTE_{tag}__",
