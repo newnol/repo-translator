@@ -2,7 +2,7 @@
 
 source_lang: zh
 target_lang: en
-translator: google        # google, google-alt, deepl, openai, ollama
+translator: google        # google, google-alt, deepl, openai, ollama, libre, mymemory
 review_with: null         # openai, anthropic, ollama (null = skip review)
 review_sample_rate: 0.15  # review 15% of translated files
 
@@ -51,6 +51,9 @@ exclude:
 
 # Translation settings
 batch_size: 40
+workers: 1
+translate_code: false
+code_scope: comments-and-strings  # or comments for the safest source-code pass
 max_chars_per_request: 5000
 retry_attempts: 3
 retry_delay: 2

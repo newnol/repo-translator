@@ -1,6 +1,12 @@
 """File classification and filtering."""
 
+from __future__ import annotations
+
+from fnmatch import fnmatch
 from pathlib import Path
+
+# Formats that can be translated without parsing source-code syntax.
+DOCUMENT_EXTENSIONS = {".md", ".markdown", ".rst", ".txt"}
 
 # File extensions that contain translatable text
 TRANSLATABLE_EXTENSIONS = {
@@ -178,7 +184,29 @@ LOCK_FILES = {
 }
 
 
-def should_translate(filepath: Path, root: Path) -> bool:
+def _matches_any(relative_path: Path, patterns: list[str] | None) -> bool:
+    """Match a repository-relative path against user supplied glob patterns."""
+    if not patterns:
+        return False
+    value = relative_path.as_posix()
+    for pattern in patterns:
+        candidates = [pattern]
+        reduced = pattern
+        while "**/" in reduced:
+            reduced = reduced.replace("**/", "", 1)
+            candidates.append(reduced)
+        if any(fnmatch(value, candidate) for candidate in candidates):
+            return True
+    return False
+
+
+def should_translate(
+    filepath: Path,
+    root: Path,
+    include_patterns: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+    translate_code: bool = True,
+) -> bool:
     """
     Determine if a file should be translated.
     Returns True if file contains translatable content.
@@ -218,6 +246,17 @@ def should_translate(filepath: Path, root: Path) -> bool:
     if filepath.suffix.lower() not in TRANSLATABLE_EXTENSIONS:
         return False
 
+    # Documentation-only is the safe default used by RepoTranslator. Direct callers
+    # retain the historical all-formats behavior unless they opt out of code.
+    if not translate_code and filepath.suffix.lower() not in DOCUMENT_EXTENSIONS:
+        return False
+
+    if include_patterns and not _matches_any(rel, include_patterns):
+        return False
+
+    if _matches_any(rel, exclude_patterns):
+        return False
+
     # Skip very large files (>500KB of text is unusual)
     try:
         if filepath.stat().st_size > 500_000:
@@ -228,10 +267,21 @@ def should_translate(filepath: Path, root: Path) -> bool:
     return True
 
 
-def get_translatable_files(root: Path) -> list[Path]:
+def get_translatable_files(
+    root: Path,
+    include_patterns: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+    translate_code: bool = True,
+) -> list[Path]:
     """Get all files that should be translated in a directory."""
     files = []
     for filepath in root.rglob("*"):
-        if filepath.is_file() and should_translate(filepath, root):
+        if filepath.is_file() and should_translate(
+            filepath,
+            root,
+            include_patterns=include_patterns,
+            exclude_patterns=exclude_patterns,
+            translate_code=translate_code,
+        ):
             files.append(filepath)
     return sorted(files)

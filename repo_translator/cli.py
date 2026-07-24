@@ -92,8 +92,37 @@ def main(verbose):
 @click.option(
     "--workers",
     default=1,
-    type=int,
-    help="Parallel file workers. Use 4+ with libre or multi-engine",
+    type=click.IntRange(min=1),
+    help="Parallel file workers. Use 4+ with LibreTranslate or multiple engines",
+)
+@click.option(
+    "--batch-size",
+    default=40,
+    type=click.IntRange(min=1, max=100),
+    help="Comment/prose spans per native provider batch",
+)
+@click.option(
+    "--include",
+    "include_patterns",
+    multiple=True,
+    help="Only translate matching repository-relative glob(s); repeatable",
+)
+@click.option(
+    "--exclude",
+    "exclude_patterns",
+    multiple=True,
+    help="Skip matching repository-relative glob(s); repeatable",
+)
+@click.option(
+    "--translate-code/--docs-only",
+    default=False,
+    help="Translate conservative code comments/string values; default: docs only",
+)
+@click.option(
+    "--code-scope",
+    type=click.Choice(["comments", "comments-and-strings"]),
+    default="comments-and-strings",
+    help="With --translate-code, translate only comments or comments plus strings",
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be translated without doing it")
 def translate(
@@ -123,6 +152,11 @@ def translate(
     push_to,
     github_token,
     workers,
+    batch_size,
+    include_patterns,
+    exclude_patterns,
+    translate_code,
+    code_scope,
     dry_run,
 ):
     """Translate a repository from one language to another."""
@@ -171,6 +205,11 @@ def translate(
         verify_max_ai_files=verify_max_files,
         verify_fail_on=verify_fail_on,
         verify_json_output=verify_json_output,
+        include_patterns=list(include_patterns) or None,
+        exclude_patterns=list(exclude_patterns) or None,
+        batch_size=batch_size,
+        translate_code=translate_code,
+        code_scope=code_scope,
         dry_run=dry_run,
         verbose=main.context_settings.get("verbose", False),
         max_workers=workers,

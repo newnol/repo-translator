@@ -1,19 +1,22 @@
 # repo-translator 🌐
 
-**Translate entire GitHub repositories** from any language to another — cheaply and reliably.
+**Translate CJK-heavy GitHub documentation and selected source files** while preserving
+repository structure.
 
 > Translating a full repo with LLMs costs $$$ (we burned ~$5+ on a single repo).  
 > This tool uses **cheap/free translation APIs** for bulk work, then optionally uses **AI for quality review** — saving 95-99% in LLM costs.
 
 ## ✨ Features
 
-- 🌐 **5 translation engines** — Google (free), DeepL, OpenAI, Anthropic, Ollama
+- 🌐 **7 translation engines** — Google, DeepL, OpenAI-compatible, Ollama, LibreTranslate, MyMemory
+- 🚄 **Native batch + multi-engine mode** — batch LibreTranslate requests and spread work across providers/endpoints
 - 🔍 **Smart language detection** — line-by-line CJK detection for mixed-language files
-- 📁 **Smart file filtering** — skip binary, node_modules, lock files automatically
+- 📁 **Scoped translation** — repeatable `--include`/`--exclude` globs and docs-only default
 - 🤖 **AI quality review** — spot-check sample with LLM for 95% cost savings
-- 📐 **Indentation preservation** — source code indentation fully maintained
+- 📐 **Conservative code mode** — choose comments only, or comments plus quoted/markup strings
 - 📄 **40+ file types** — `.md`, `.py`, `.rs`, `.js`, `.ts`, `.go`, `.java`, `.html`, `.ui`, `.xml`, `.json`, `.yaml`, and more
-- 📤 **Push to GitHub** — full pipeline: clone → translate → review → push
+- ✅ **Independent verification** — immutable source snapshot is compared with translated output
+- 📤 **Safe Git push** — pushes `repo-translator/<language>` without force or stored tokens
 - 🖥️ **CLI + Python API** — use as command line tool or import as library
 
 ## Architecture
@@ -79,6 +82,101 @@ repo-translator translate \
   --translator ollama
 ```
 
+### Translate `retain-pdf` from Chinese to English
+
+Start with the documentation-only pass. This avoids mutating Python, Rust, and
+TypeScript while you validate terminology and translation quality:
+
+```bash
+repo-translator translate \
+  --repo https://github.com/wxyhgk/retain-pdf.git \
+  --source-lang zh \
+  --target-lang en \
+  --translator libre \
+  --base-url http://localhost:5000 \
+  --output-dir ./retain-pdf-en \
+  --include README.md \
+  --include 'backend/README.md' \
+  --include 'doc/**/*.md' \
+  --include 'docs/**/*.md' \
+  --include 'frontend/**/README.md' \
+  --include 'frontend-react/**/README.md' \
+  --exclude 'doc/reference/**' \
+  --workers 4 \
+  --verify
+```
+
+After reviewing that output, translate selected UI source paths explicitly:
+
+```bash
+repo-translator translate \
+  --repo https://github.com/wxyhgk/retain-pdf.git \
+  --source-lang zh \
+  --target-lang en \
+  --translator libre \
+  --base-url http://localhost:5000 \
+  --output-dir ./retain-pdf-en \
+  --translate-code \
+  --code-scope comments \
+  --include 'backend/**/*.py' \
+  --include 'backend/rust_api/**/*.rs' \
+  --include 'frontend/**/*.ts' \
+  --include 'frontend/**/*.tsx' \
+  --include 'frontend-react/**/*.ts' \
+  --include 'frontend-react/**/*.tsx' \
+  --exclude '**/tests/**' \
+  --exclude '**/*.test.*' \
+  --exclude '**/fixtures/**' \
+  --workers 4 \
+  --verify
+```
+
+Run `--dry-run` first if you want to inspect the selected file count without
+calling a translation provider.
+
+### Fast local translation with LibreTranslate
+
+LibreTranslate accepts an array of strings in one `/translate` request. This
+project uses that native batch API, so `--batch-size 40` translates up to 40
+comment/prose spans per request instead of making one request for every line.
+
+```bash
+docker run -d --name libretranslate -p 5000:5000 libretranslate/libretranslate
+
+repo-translator translate \
+  --repo ./retain-pdf \
+  --source-lang zh \
+  --target-lang en \
+  --translator libre \
+  --base-url http://localhost:5000 \
+  --translate-code \
+  --code-scope comments \
+  --workers 4 \
+  --batch-size 40
+```
+
+For a host with enough CPU and RAM, start more than one LibreTranslate instance
+and repeat the engine name. Each endpoint receives a share of every batch:
+
+```bash
+docker run -d --name libre-1 -p 5000:5000 libretranslate/libretranslate
+docker run -d --name libre-2 -p 5001:5000 libretranslate/libretranslate
+
+repo-translator translate \
+  --repo ./retain-pdf \
+  --source-lang zh \
+  --target-lang en \
+  --translator libre,libre \
+  --base-url http://localhost:5000,http://localhost:5001 \
+  --translate-code \
+  --code-scope comments \
+  --workers 4
+```
+
+Comma-separated providers also work, for example
+`--translator libre,google-alt`. Results remain in input order even though the
+provider batches run concurrently.
+
 ## 🌐 Translation Engines
 
 | Engine | Cost | Quality | Speed | Best For |
@@ -86,8 +184,9 @@ repo-translator translate \
 | `google` | **Free** (500K chars/month) | Good | ⚡ Fast | Bulk translation, docs |
 | `deepl` | $5.49/month (500K chars) | ⭐ Best | ⚡ Fast | Technical content |
 | `openai` | ~$0.01/1K chars | Great | 🐢 Medium | Nuanced translation |
-| `anthropic` | ~$0.01/1K chars | Great | 🐢 Medium | Code-aware translation |
 | `ollama` | **Free** (local) | Good | 🐢 Slow | Privacy-sensitive repos |
+| `libre` | Depends on host | Good | ⚡ Fast | Self-hosted bulk translation |
+| `mymemory` | Free tier | Good | ⚡ Fast | Small documentation sets |
 
 ## 🤖 AI Review
 
@@ -95,7 +194,7 @@ After bulk translation, optionally run LLM spot-check on a sample:
 
 - ✅ Checks for untranslated foreign characters
 - ✅ Validates technical term accuracy
-- ✅ Fixes formatting / code block issues
+- ✅ Reports formatting / code block issues
 - ✅ Only reviews 10-20% of files → **massive cost savings**
 
 ```bash
@@ -148,43 +247,22 @@ repo-translator review \
 - Lock files (`package-lock.json`, `Cargo.lock`, `poetry.lock`)
 - Hidden directories (`.git/`, `.github/`, `.vscode/`)
 
-## ⚙️ Configuration
+## ⚙️ File selection
 
-```yaml
-# config.yaml
-source_lang: zh
-target_lang: en
-translator: google
-review_with: null  # or: openai, anthropic, ollama
-review_sample_rate: 0.15  # review 15% of files
-
-# File patterns to include/exclude
-include:
-  - "*.md"
-  - "*.py"
-  - "*.rs"
-  - "*.js"
-  - "*.html"
-  - "*.json"
-  - "*.ui"
-  - "*.xml"
-
-exclude:
-  - "node_modules/**"
-  - "target/**"
-  - "*.min.js"
-  - "*.lock"
-  - "package-lock.json"
-
-# Batch settings
-batch_size: 40  # files per batch
-max_chars_per_request: 5000  # chars per API call
-retry_attempts: 3
-retry_delay: 2  # seconds
-
-# GitHub settings
-github_token: null  # or set GITHUB_TOKEN env var
+```bash
+# Repeat --include and --exclude as needed.
+repo-translator translate \
+  --repo ./source-repo \
+  --include 'README.md' \
+  --include 'docs/**/*.md' \
+  --exclude 'docs/archive/**'
 ```
+
+Source code is excluded by default. Add `--translate-code` only for paths you
+have selected and can validate with the target repository's own test suite.
+Use `--code-scope comments` when the goal is to translate Chinese comments
+without changing runtime strings. The default `comments-and-strings` mode also
+translates quoted values and plain HTML/JSX text nodes.
 
 ## 🖥️ CLI Commands
 
@@ -250,8 +328,8 @@ translator.push("./translated-repo", "username/new-repo-name")
 
 ### 2. Translate
 - Extracts translatable text from each file
-- For source code: extracts only comments and string literals (preserves code)
-- Batches text to minimize API calls
+- For source code: extracts comments, with string literals enabled only by the selected code scope
+- Uses native provider batches and optional multi-engine distribution
 - Preserves indentation and formatting
 
 ### 3. AI Review (optional)
@@ -261,9 +339,9 @@ translator.push("./translated-repo", "username/new-repo-name")
 - Generates quality report
 
 ### 4. Push
-- Creates new repo or updates existing one
-- Commits all translated files
-- Preserves git history structure
+- Requires an existing destination repository
+- Commits to `repo-translator/<target-language>`
+- Pushes without force and never writes the token to `.git/config`
 
 ## 🤝 Contributing
 

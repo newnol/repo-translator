@@ -77,6 +77,27 @@ class TestFileFilter:
         lock_file.write_text("{}")
         assert should_translate(lock_file, tmp_path) is False
 
+    def test_docs_only_and_path_patterns(self, tmp_path):
+        from repo_translator.file_filter import get_translatable_files
+
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        readme = docs / "README.md"
+        readme.write_text("# 中文")
+        draft = docs / "draft.md"
+        draft.write_text("# 中文")
+        source = tmp_path / "app.py"
+        source.write_text('label = "中文"')
+
+        files = get_translatable_files(
+            tmp_path,
+            include_patterns=["docs/**"],
+            exclude_patterns=["**/draft.md"],
+            translate_code=False,
+        )
+
+        assert files == [readme]
+
 
 class TestExtractText:
     """Test text extraction from source code."""
@@ -144,6 +165,62 @@ class TestTranslators:
         assert "+" in t.name
         assert "Google Translate" in t.name
         assert len(t.translators) == 2
+
+    def test_multi_translator_distributes_native_batches_and_keeps_order(self):
+        from repo_translator.translators.base import BaseTranslator
+        from repo_translator.translators.multi import MultiTranslator
+
+        class BatchTranslator(BaseTranslator):
+            def __init__(self, label):
+                super().__init__("zh", "en")
+                self.label = label
+                self.batches = []
+
+            @property
+            def name(self):
+                return self.label
+
+            def translate_text(self, text):
+                return f"{self.label}:{text}"
+
+            def translate_batch(self, texts):
+                self.batches.append(texts)
+                return [self.translate_text(text) for text in texts]
+
+        first = BatchTranslator("first")
+        second = BatchTranslator("second")
+        translator = MultiTranslator([first, second])
+
+        result = translator.translate_batch(["0", "1", "2", "3", "4"])
+
+        assert result == ["first:0", "second:1", "first:2", "second:3", "first:4"]
+        assert first.batches == [["0", "2", "4"]]
+        assert second.batches == [["1", "3"]]
+
+    def test_libre_uses_array_batch_api(self, monkeypatch):
+        import requests
+
+        from repo_translator.translators.libre import LibreTranslate
+
+        calls = []
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"translatedText": ["Hello", "World"]}
+
+        def fake_post(url, json, timeout):
+            calls.append((url, json, timeout))
+            return Response()
+
+        monkeypatch.setattr(requests, "post", fake_post)
+        translator = LibreTranslate("zh", "en", base_url="http://libre.test")
+
+        assert translator.translate_batch(["你好", "世界"]) == ["Hello", "World"]
+        assert calls[0][0] == "http://libre.test/translate"
+        assert calls[0][1]["q"] == ["你好", "世界"]
 
     def test_chunk_text(self):
         from repo_translator.translators.base import BaseTranslator
@@ -217,6 +294,32 @@ class TestCLI:
         assert copied_link.is_symlink()
         assert not copied_link.exists()
 
+    def test_cli_accepts_comments_only_and_batch_size(self, runner, tmp_path):
+        from repo_translator.cli import main
+
+        source = tmp_path / "app.py"
+        source.write_text('label = "运行时文本"  # 中文注释', encoding="utf-8")
+
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                "--repo",
+                str(tmp_path),
+                "--translator",
+                "libre",
+                "--translate-code",
+                "--code-scope",
+                "comments",
+                "--batch-size",
+                "25",
+                "--dry-run",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Translation complete" in result.output
+
 
 class TestProtectedTranslation:
     """Regression tests for preserving repository structure while translating."""
@@ -232,6 +335,7 @@ class TestProtectedTranslation:
                 .replace("$x_t", "$release")
                 .replace("${expected}", "${value}")
                 .replace("https://example.com/docs", "https://example.com/translated-docs")
+                .replace("./docs/guide.md", "./translated/guide.md")
                 .replace("retain-pdf --help", "retain-pdf translated help")
                 .replace("## 1. Upload PDF", "```## 1. Upload PDF`")
                 .replace("。！？；", ".!?;")
@@ -250,6 +354,7 @@ class TestProtectedTranslation:
 
 Run `retain-pdf --help` and keep `${expected}`.
 Visit https://example.com/docs.
+Read [文档](./docs/guide.md).
 
 ```bash
 retain-pdf --help
@@ -265,8 +370,10 @@ retain-pdf --help
         assert "`retain-pdf --help`" in translated
         assert "${expected}" in translated
         assert "https://example.com/docs" in translated
+        assert "(./docs/guide.md)" in translated
         assert "retain-pdf translated help" not in translated
         assert "https://example.com/translated-docs" not in translated
+        assert "./translated/guide.md" not in translated
 
     def test_json_translation_preserves_syntax_and_keys(self):
         import json
@@ -320,6 +427,195 @@ retain-pdf --help
         translated = translator._translate_source_lines([line])
 
         assert translated == [line]
+
+    def test_source_translation_only_changes_string_and_comment_bodies(self):
+        translator = self._translator()
+        translator.translator.translate_text = lambda text: (
+            text.replace("上传 PDF", "Upload PDF").replace("按钮说明", "Button help")
+        )
+        line = 'const label = "上传 PDF"; // 按钮说明'
+
+        translated = translator._translate_source_lines([line], ".ts")
+
+        assert translated == ['const label = "Upload PDF"; // Button help']
+
+    def test_source_comments_are_batched_and_strings_can_be_excluded(self):
+        translator = self._translator()
+        translator.code_scope = "comments"
+        translator.batch_size = 40
+        batches = []
+
+        def translate_batch(texts):
+            batches.append(texts)
+            return [
+                text.replace("第一条说明", "First note").replace("第二条说明", "Second note")
+                for text in texts
+            ]
+
+        translator.translator.translate_batch = translate_batch
+        lines = [
+            'const label = "上传 PDF"; // 第一条说明',
+            "// 第二条说明",
+        ]
+
+        translated = translator._translate_source_lines(lines, ".ts")
+
+        assert translated == ['const label = "上传 PDF"; // First note', "// Second note"]
+        assert len(batches) == 1
+        assert batches[0] == ["第一条说明", "第二条说明"]
+
+    def test_batched_string_translation_escapes_new_quotes(self):
+        translator = self._translator()
+        translator.code_scope = "comments-and-strings"
+        translator.batch_size = 40
+        translator.translator.translate_batch = lambda texts: [
+            'Click "Upload"' if text == "上传" else text for text in texts
+        ]
+
+        translated = translator._translate_source_lines(['label = "上传"'], ".py")
+
+        assert translated == ['label = "Click \\"Upload\\""']
+
+    def test_comments_only_translates_multiline_block_comment(self):
+        translator = self._translator()
+        translator.code_scope = "comments"
+        translator.translator.translate_batch = lambda texts: [
+            text.replace("开始说明", "Start note")
+            .replace("中间说明", "Middle note")
+            .replace("结束说明", "End note")
+            for text in texts
+        ]
+
+        translated = translator._translate_source_lines(
+            [
+                'const value = "中文不应翻译"; /* 开始说明',
+                " * 中间说明",
+                " 结束说明 */",
+            ],
+            ".ts",
+        )
+
+        assert translated == [
+            'const value = "中文不应翻译"; /* Start note',
+            " * Middle note",
+            " End note */",
+        ]
+
+    def test_comments_only_translates_python_docstrings_not_runtime_strings(self):
+        translator = self._translator()
+        translator.code_scope = "comments"
+        translator.translator.translate_batch = lambda texts: [
+            text.replace("模块说明", "Module docs")
+            .replace("函数说明", "Function docs")
+            .replace("第二行", "Second line")
+            for text in texts
+        ]
+
+        translated = translator._translate_source_lines(
+            [
+                '"""模块说明"""',
+                "",
+                "def run():",
+                '    """函数说明',
+                "    第二行",
+                '    """',
+                '    return "运行时中文"',
+            ],
+            ".py",
+        )
+
+        assert translated == [
+            '"""Module docs"""',
+            "",
+            "def run():",
+            '    """Function docs',
+            "    Second line",
+            '    """',
+            '    return "运行时中文"',
+        ]
+
+    def test_source_batches_collapse_provider_newlines_and_escape_docstring_delimiter(self):
+        translator = self._translator()
+        translator.code_scope = "comments"
+        translator.translator.translate_batch = lambda texts: [
+            'First line\nsecond line with """ quotes' for _ in texts
+        ]
+
+        translated = translator._translate_source_lines(
+            ['"""模块说明"""', "# 行注释"],
+            ".py",
+        )
+
+        assert translated == [
+            '"""First line second line with \\""" quotes"""',
+            '# First line second line with """ quotes',
+        ]
+        compile("\n".join(translated), "translated.py", "exec")
+
+    def test_markdown_keeps_structural_prefix_and_final_newline_state(self):
+        translator = self._translator()
+        translator.translator.translate_text = lambda text: text.replace("使用说明", "Usage")
+
+        assert translator._translate_markdown("# 使用说明") == "# Usage"
+        assert translator._translate_markdown("- 使用说明\n") == "- Usage\n"
+
+
+class TestPipelineSafety:
+    def test_dry_run_does_not_write_resume_state(self, tmp_path):
+        from repo_translator.core import STATE_FILE, RepoTranslator
+
+        (tmp_path / "README.md").write_text("# 中文内容", encoding="utf-8")
+        translator = RepoTranslator(translator_engine="google-alt", dry_run=True)
+
+        translator.translate_in_place(tmp_path)
+
+        assert not (tmp_path / STATE_FILE).exists()
+
+    def test_parallel_failures_are_not_saved_as_success(self, tmp_path, monkeypatch):
+        from repo_translator.core import STATE_FILE, RepoTranslator
+
+        for name in ("a.md", "b.md"):
+            (tmp_path / name).write_text("# 中文内容", encoding="utf-8")
+
+        translator = RepoTranslator(translator_engine="google-alt", max_workers=2)
+        monkeypatch.setattr(
+            translator,
+            "_translate_one_file",
+            lambda filepath, root: {
+                "ok": False,
+                "rel": str(filepath.relative_to(root)),
+                "error": "boom",
+            },
+        )
+
+        stats = translator.translate_in_place(tmp_path)
+        state = __import__("json").loads((tmp_path / STATE_FILE).read_text(encoding="utf-8"))
+
+        assert stats.translated_files == 0
+        assert stats.failed_files == 2
+        assert state["translated"] == []
+
+    def test_remote_run_keeps_source_snapshot_separate(self, tmp_path, monkeypatch):
+        from repo_translator.core import RepoTranslator
+
+        translator = RepoTranslator(
+            translator_engine="google-alt",
+            dry_run=True,
+            verify=True,
+        )
+
+        def fake_clone(_url, output_dir):
+            output_dir = __import__("pathlib").Path(output_dir)
+            output_dir.mkdir(parents=True)
+            (output_dir / "README.md").write_text("# 中文内容", encoding="utf-8")
+            return output_dir
+
+        monkeypatch.setattr(translator, "clone", fake_clone)
+        output = tmp_path / "translated"
+        result = translator.run(repo_url="https://example.test/repo.git", output_dir=str(output))
+
+        assert result["success"] is True
+        assert result["verification"].source_dir != result["verification"].target_dir
 
 
 class TestReviewers:

@@ -42,7 +42,7 @@ Useful targeted commands:
 .venv/bin/repo-translator engines
 ```
 
-Current full test suite expectation: `29 passed`.
+Current full test suite expectation: `56 passed`.
 
 ## Project Structure
 
@@ -72,7 +72,9 @@ Current full test suite expectation: `29 passed`.
    - For CJK source languages (`zh`, `ja`, `ko`), it looks for CJK characters.
    - For other languages, file-level detection is broad, but source-code line translation is still CJK-oriented.
 6. Markdown/text files are translated as whole files.
-7. Source/config/markup files are translated line-by-line for CJK-containing lines, preserving indentation.
+7. Source/config/markup files extract CJK comments/docstrings and optionally string/markup
+   values. Extracted spans use native provider batches; `MultiTranslator` distributes each
+   batch across its engines concurrently while preserving result order.
 8. Optional `AIReviewer` samples translated files and checks for untranslated CJK, broken markdown fences, and optional OpenAI-compatible deep review.
 9. Optional equivalence verification compares source/target manifests, binary checksums, parseability of structured files, and invariants like URLs/placeholders/code blocks. With `--verify-ai`, it also runs sampled semantic checks through the configured OpenAI-compatible reviewer; default provider is Vercel AI Gateway.
 10. Optional `push()` force-pushes translated output to `main` of an existing GitHub repo using `GITHUB_TOKEN` or provided token.

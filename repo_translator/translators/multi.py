@@ -1,6 +1,8 @@
 """Multi-translator: combine several engines for higher throughput."""
 
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from .base import BaseTranslator
 
@@ -21,6 +23,7 @@ class MultiTranslator(BaseTranslator):
         )
         self.translators = translators
         self._index = 0
+        self._lock = threading.Lock()
 
     @property
     def name(self) -> str:
@@ -28,16 +31,55 @@ class MultiTranslator(BaseTranslator):
 
     @property
     def max_chars_per_request(self) -> int:
-        return max(t.max_chars_per_request for t in self.translators)
+        if not self.translators:
+            return super().max_chars_per_request
+        return min(t.max_chars_per_request for t in self.translators)
+
+    def _next_translator(self) -> BaseTranslator:
+        """Select an engine safely when file workers call us concurrently."""
+        with self._lock:
+            translator = self.translators[self._index % len(self.translators)]
+            self._index += 1
+        return translator
 
     def translate_text(self, text: str) -> str:
         if not self.translators:
             return text
 
-        t = self.translators[self._index % len(self.translators)]
-        self._index += 1
-        return t.translate_text(text)
+        return self._next_translator().translate_text(text)
 
     def translate_batch(self, texts: list[str]) -> list[str]:
-        """Batch translate with round-robin per text."""
-        return [self.translate_text(t) for t in texts]
+        """Split a batch across engines and execute their native batches in parallel."""
+        if not self.translators or not texts:
+            return list(texts)
+
+        assignments: list[list[tuple[int, str]]] = [[] for _ in self.translators]
+        with self._lock:
+            start = self._index
+            self._index += len(texts)
+
+        for offset, text in enumerate(texts):
+            assignments[(start + offset) % len(self.translators)].append((offset, text))
+
+        results = list(texts)
+
+        def run_batch(engine_index: int) -> list[tuple[int, str]]:
+            assigned = assignments[engine_index]
+            if not assigned:
+                return []
+            positions, batch = zip(*assigned)
+            translated = self.translators[engine_index].translate_batch(list(batch))
+            if len(translated) != len(batch):
+                raise ValueError(
+                    f"{self.translators[engine_index].name} returned "
+                    f"{len(translated)} results for {len(batch)} inputs"
+                )
+            return list(zip(positions, translated))
+
+        active = [index for index, assigned in enumerate(assignments) if assigned]
+        with ThreadPoolExecutor(max_workers=len(active)) as pool:
+            for translated_batch in pool.map(run_batch, active):
+                for position, translated in translated_batch:
+                    results[position] = translated
+
+        return results

@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -26,8 +27,11 @@ console = Console()
 PROTECTED_TOKEN_PATTERN = re.compile(
     r"```[\s\S]*?```"  # fenced markdown code blocks
     r"|`[^`\n]+`"  # inline markdown code
+    r"|</?[A-Za-z][^>]*>"  # HTML/JSX tags
     r"|\|\|\|SEP\|\|\|"  # internal batch separator
     r"|https?://[^\s)>'\"]+"  # URLs
+    r"|\((?:[#./][^)\s]+|[^)\s]+\.[A-Za-z0-9]{1,8}(?:#[^)\s]+)?)\)"  # link targets
+    r"|\\(?:[\\'\"abfnrtv]|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})"
     r"|\{\{[^{}]+\}\}"  # template placeholders
     r"|\$\{[A-Za-z_][A-Za-z0-9_]*\}"  # ${VAR}
     r"|\$[A-Za-z_][A-Za-z0-9_]*(?:_[A-Za-z0-9]+)*"  # $x_t / $API_KEY
@@ -36,6 +40,9 @@ PROTECTED_TOKEN_PATTERN = re.compile(
 )
 
 CJK_IDEOGRAPH_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+QUOTED_STRING_PATTERN = re.compile(
+    r'"(?P<double>(?:\\.|[^"\\])*)"|\'(?P<single>(?:\\.|[^\'\\])*)\''
+)
 
 STATE_FILE = ".repo-translator-state.json"
 
@@ -109,12 +116,20 @@ class RepoTranslator:
         exclude_patterns: list[str] | None = None,
         batch_size: int = 40,
         max_workers: int = 1,
+        translate_code: bool = False,
+        code_scope: str = "comments-and-strings",
         dry_run: bool = False,
         verbose: bool = False,
     ):
+        if code_scope not in {"comments", "comments-and-strings"}:
+            raise ValueError("code_scope must be 'comments' or 'comments-and-strings'")
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.batch_size = batch_size
+        self.include_patterns = include_patterns
+        self.exclude_patterns = exclude_patterns
+        self.translate_code = translate_code
+        self.code_scope = code_scope
         self.dry_run = dry_run
         self.max_workers = max_workers
         self.verbose = verbose
@@ -180,45 +195,42 @@ class RepoTranslator:
             "push_url": None,
         }
 
+        temporary_source: tempfile.TemporaryDirectory | None = None
         try:
             # Step 1: Get source repo
             if repo_url:
-                dest_path = Path(output_dir) if output_dir else None
-                if dest_path and (dest_path / STATE_FILE).exists():
-                    logger.info(f"Resuming: found existing state in {dest_path}")
-                    source_dir = dest_path
-                else:
-                    source_dir = self.clone(repo_url, output_dir or "/tmp/repo-translate-source")
+                temporary_source = tempfile.TemporaryDirectory(prefix="repo-translator-source-")
+                source_dir = self.clone(repo_url, Path(temporary_source.name) / "source")
+                if output_dir is None:
+                    repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
+                    output_dir = str(Path.cwd() / f"{repo_name}-translated")
             elif repo_dir:
                 source_dir = Path(repo_dir)
             else:
                 raise ValueError("Either repo_url or repo_dir is required")
 
+            if not output_dir and (self.reviewer or self.verify):
+                raise ValueError(
+                    "Review and verification require an output directory separate from source"
+                )
+
             # Step 2: Translate
             if output_dir and repo_url:
-                # Clone + translate to new dir
                 dest_dir = Path(output_dir)
                 self.translate(source_dir, dest_dir)
             elif output_dir:
-                # Copy and translate in place
                 dest_dir = Path(output_dir)
-                if dest_dir != source_dir:
-                    if dest_dir.exists():
-                        state_file = dest_dir / STATE_FILE
-                        if state_file.exists():
-                            logger.info(f"Resuming: keeping existing output directory {dest_dir}")
-                        else:
-                            shutil.rmtree(dest_dir)
-                            shutil.copytree(source_dir, dest_dir, symlinks=True)
-                    else:
-                        shutil.copytree(source_dir, dest_dir, symlinks=True)
-                self.translate_in_place(dest_dir)
+                if dest_dir.resolve() == source_dir.resolve():
+                    self.translate_in_place(dest_dir)
+                else:
+                    self.translate(source_dir, dest_dir)
             else:
                 dest_dir = source_dir
                 self.translate_in_place(dest_dir)
 
             # Step 3: AI Review (optional)
             if self.reviewer:
+                self._assert_distinct_directories(source_dir, dest_dir)
                 report = self.reviewer.review(dest_dir, source_dir)
                 result["review"] = report
                 console.print(report.summary())
@@ -227,6 +239,7 @@ class RepoTranslator:
             if self.verify:
                 from .equivalence import verify_equivalence
 
+                self._assert_distinct_directories(source_dir, dest_dir)
                 report = verify_equivalence(
                     source_dir=source_dir,
                     target_dir=dest_dir,
@@ -270,10 +283,19 @@ class RepoTranslator:
 
                 traceback.print_exc()
             result["error"] = str(e)
+        finally:
+            if temporary_source is not None:
+                temporary_source.cleanup()
 
         return result
 
-    def clone(self, repo_url: str, output_dir: str) -> Path:
+    @staticmethod
+    def _assert_distinct_directories(source_dir: Path, target_dir: Path):
+        """Prevent review/verification from comparing a translated tree to itself."""
+        if source_dir.resolve() == target_dir.resolve():
+            raise ValueError("Source and target directories must be different")
+
+    def clone(self, repo_url: str, output_dir: str | Path) -> Path:
         """Clone a git repository."""
         import git
 
@@ -291,8 +313,11 @@ class RepoTranslator:
 
     def translate(self, source_dir: Path, dest_dir: Path) -> TranslationStats:
         """Translate files from source to destination directory."""
-        # Copy source to dest first
-        if source_dir != dest_dir:
+        self._assert_distinct_directories(source_dir, dest_dir)
+        state_path = dest_dir / STATE_FILE
+        if dest_dir.exists() and state_path.exists():
+            logger.info(f"Resuming: keeping existing output directory {dest_dir}")
+        else:
             if dest_dir.exists():
                 shutil.rmtree(dest_dir)
             shutil.copytree(source_dir, dest_dir, symlinks=True)
@@ -306,21 +331,58 @@ class RepoTranslator:
             return set()
         try:
             data = json.loads(state_path.read_text(encoding="utf-8"))
+            if data.get("source_lang", self.source_lang) != self.source_lang:
+                logger.warning("Resume state source language changed; starting fresh")
+                return set()
+            if data.get("target_lang", self.target_lang) != self.target_lang:
+                logger.warning("Resume state target language changed; starting fresh")
+                return set()
+            if data.get("translate_code", self.translate_code) != self.translate_code:
+                logger.warning("Resume state code mode changed; starting fresh")
+                return set()
+            if data.get("code_scope", self.code_scope) != self.code_scope:
+                logger.warning("Resume state code scope changed; starting fresh")
+                return set()
             return set(data.get("translated", []))
         except (json.JSONDecodeError, KeyError):
             logger.warning("Corrupt state file, starting fresh")
             return set()
 
     def _save_state(self, directory: Path, translated: set):
-        """Save translated file paths to state file."""
+        """Atomically save translated file paths to avoid corrupt resume state."""
         state_path = directory / STATE_FILE
-        data = {"translated": sorted(translated)}
-        state_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        data = {
+            "version": 2,
+            "source_lang": self.source_lang,
+            "target_lang": self.target_lang,
+            "translate_code": self.translate_code,
+            "code_scope": self.code_scope,
+            "translated": sorted(translated),
+        }
+        fd, temporary_name = tempfile.mkstemp(
+            dir=directory,
+            prefix=f"{STATE_FILE}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as temporary_file:
+                json.dump(data, temporary_file, ensure_ascii=False)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.replace(temporary_name, state_path)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
 
     def translate_in_place(self, directory: Path) -> TranslationStats:
         """Translate files in-place."""
         self.stats = TranslationStats()
-        files = get_translatable_files(directory)
+        files = get_translatable_files(
+            directory,
+            include_patterns=self.include_patterns,
+            exclude_patterns=self.exclude_patterns,
+            translate_code=self.translate_code,
+        )
         self.stats.total_files = len(files)
 
         console.print(
@@ -344,7 +406,8 @@ class RepoTranslator:
                 if rel in translated_set:
                     self.stats.skipped_files += 1
                     continue
-                content = filepath.read_text(encoding="utf-8", errors="ignore")
+                content = filepath.read_text(encoding="utf-8")
+                self.stats.total_chars += len(content)
                 if (
                     has_cjk(content)
                     if self.source_lang in ("zh", "ja", "ko")
@@ -361,7 +424,8 @@ class RepoTranslator:
         if not to_translate:
             console.print("   ⚠️  No files need translation!")
             # Save state even if 0 to mark completion
-            self._save_state(directory, translated_set)
+            if not self.dry_run:
+                self._save_state(directory, translated_set)
             return self.stats
 
         # Translate files
@@ -372,27 +436,29 @@ class RepoTranslator:
             from concurrent.futures import ThreadPoolExecutor
 
             lock = threading.Lock()
+            processed = 0
 
             def _process(filepath):
+                nonlocal processed
                 rel_path = str(filepath.relative_to(directory))
                 try:
                     result = self._translate_one_file(filepath, directory)
                 except Exception as e:
                     result = {"ok": False, "rel": rel_path, "error": str(e)}
                 with lock:
-                    if result.get("ok"):
+                    if result.get("action") == "translated":
                         translated_set.add(rel_path)
-                    self._save_state(directory, translated_set)
-                    done = len(translated_set)
-                    if done % 10 == 0 or done == total:
-                        console.print(f"   [{done}/{total}] Translated: {rel_path}")
+                    if not self.dry_run:
+                        self._save_state(directory, translated_set)
+                    processed += 1
+                    if processed % 10 == 0 or processed == total:
+                        console.print(f"   [{processed}/{total}] Processed: {rel_path}")
                 return result
 
             with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-                list(pool.map(_process, to_translate))
-
-            # Recalculate stats from state
-            self.stats.translated_files = len(translated_set)
+                results = list(pool.map(_process, to_translate))
+            for result in results:
+                self._record_result(result)
         else:
             with Progress(
                 SpinnerColumn(),
@@ -405,14 +471,30 @@ class RepoTranslator:
             ) as progress:
                 task = progress.add_task("Translating...", total=total)
                 for filepath in to_translate:
-                    self._translate_one_file(filepath, directory, progress, task, translated_set)
-                    self._save_state(directory, translated_set)
+                    result = self._translate_one_file(filepath, directory)
+                    self._record_result(result)
+                    if result.get("action") == "translated":
+                        translated_set.add(result["rel"])
+                    if not self.dry_run:
+                        self._save_state(directory, translated_set)
+                    progress.advance(task)
 
         self.stats.end_time = datetime.now()
 
         # Print summary
         console.print(f"\n{self.stats.summary()}")
         return self.stats
+
+    def _record_result(self, result: dict):
+        """Update run statistics from one file result."""
+        if not result.get("ok"):
+            self.stats.failed_files += 1
+            return
+        if result.get("action") == "translated":
+            self.stats.translated_files += 1
+            self.stats.translated_chars += int(result.get("translated_chars", 0))
+        else:
+            self.stats.skipped_files += 1
 
     def _translate_one_file(
         self,
@@ -428,49 +510,83 @@ class RepoTranslator:
         """
         rel_path = str(filepath.relative_to(root))
         try:
-            content = filepath.read_text(encoding="utf-8", errors="ignore")
+            content = filepath.read_text(encoding="utf-8")
 
             from .detector import extract_translatable_text
 
             translatable = extract_translatable_text(content, filepath.suffix)
 
             if not translatable or len(translatable.strip()) < 5:
-                if progress:
-                    self.stats.skipped_files += 1
-                    progress.advance(task)
                 return {"ok": True, "rel": rel_path, "action": "skip"}
 
             if self.dry_run:
                 logger.info(f"[DRY RUN] Would translate: {rel_path}")
-                if progress:
-                    progress.advance(task)
                 return {"ok": True, "rel": rel_path, "action": "dry-run"}
 
             if filepath.suffix in (".md", ".markdown", ".rst", ".txt"):
                 translated = self._translate_markdown(content)
-                filepath.write_text(translated, encoding="utf-8")
             elif filepath.suffix == ".json":
                 translated = self._translate_json_content(content)
-                filepath.write_text(translated, encoding="utf-8")
             else:
-                translated_lines = self._translate_source_lines(content.split("\n"))
-                filepath.write_text("\n".join(translated_lines), encoding="utf-8")
+                translated_lines = self._translate_source_lines(
+                    content.split("\n"),
+                    filepath.suffix.lower(),
+                )
+                translated = "\n".join(translated_lines)
 
-            if progress:
-                self.stats.translated_files += 1
-                progress.advance(task)
+            if translated == content:
+                return {"ok": True, "rel": rel_path, "action": "skip"}
 
-            if translated_set is not None:
-                translated_set.add(rel_path)
+            self._validate_translated_content(filepath, translated)
+            self._write_text_atomic(filepath, translated)
 
-            return {"ok": True, "rel": rel_path, "action": "translated"}
+            return {
+                "ok": True,
+                "rel": rel_path,
+                "action": "translated",
+                "translated_chars": len(translatable),
+            }
 
         except Exception as e:
             logger.warning(f"Failed to translate {rel_path}: {e}")
-            if progress:
-                self.stats.failed_files += 1
-                progress.advance(task)
             return {"ok": False, "rel": rel_path, "error": str(e)}
+
+    @staticmethod
+    def _write_text_atomic(filepath: Path, content: str):
+        """Replace a text file atomically after translation and validation."""
+        fd, temporary_name = tempfile.mkstemp(
+            dir=filepath.parent,
+            prefix=f".{filepath.name}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as temporary_file:
+                temporary_file.write(content)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.replace(temporary_name, filepath)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
+
+    @staticmethod
+    def _validate_translated_content(filepath: Path, content: str):
+        """Reject translated structured files that no longer parse."""
+        suffix = filepath.suffix.lower()
+        if suffix == ".json":
+            json.loads(content)
+        elif suffix in {".yaml", ".yml"}:
+            import yaml
+
+            yaml.safe_load(content)
+        elif suffix == ".toml":
+            try:
+                import tomllib
+            except ModuleNotFoundError:  # pragma: no cover - Python 3.9/3.10
+                return
+            tomllib.loads(content)
+        elif suffix == ".py":
+            compile(content, str(filepath), "exec")
 
     def _translate_batch(
         self,
@@ -484,73 +600,377 @@ class RepoTranslator:
         if translated_set is None:
             translated_set = set()
         for filepath in files:
-            self._translate_one_file(filepath, root, progress, task, translated_set)
-            self._save_state(root, translated_set)
+            result = self._translate_one_file(filepath, root)
+            self._record_result(result)
+            if result.get("action") == "translated":
+                translated_set.add(result["rel"])
+            if not self.dry_run:
+                self._save_state(root, translated_set)
+            progress.advance(task)
 
-    def _translate_source_lines(self, lines: list[str]) -> list[str]:
+    def _translate_source_lines(self, lines: list[str], suffix: str = "") -> list[str]:
         """
-        Translate source code line-by-line.
-        Only translates lines containing CJK characters (comments, strings, docstrings).
-        Preserves code structure and indentation.
+        Translate only comments, quoted string bodies, and markup text nodes.
+
+        Delimiters and surrounding source code are never sent to the provider. This
+        intentionally leaves ambiguous constructs untouched instead of risking a
+        syntactically invalid repository. All extracted spans are sent through the
+        provider's batch API, which is substantially faster for LibreTranslate.
         """
-        translated_lines = []
-        batch_to_translate = []
-        batch_indices = []
-        batch_indents = []
+        deferred: list[str] = []
+        markers_by_text: dict[str, str] = {}
 
-        # Collect lines that need translation, preserving indentation
-        for i, line in enumerate(lines):
-            if has_cjk(line) and _has_cjk_ideograph(line) and len(line.strip()) > 2:
-                batch_to_translate.append(line.strip())
-                batch_indices.append(i)
-                # Save original indentation
-                indent = len(line) - len(line.lstrip())
-                batch_indents.append(indent)
-            translated_lines.append(line)
+        def defer(text: str) -> str:
+            marker = markers_by_text.get(text)
+            if marker is None:
+                marker = f"__REPO_TRANSLATOR_SPAN_{len(deferred):08d}__"
+                markers_by_text[text] = marker
+                deferred.append(text)
+            return marker
 
-        if not batch_to_translate:
-            return translated_lines
+        templates = []
+        in_block_comment = False
+        comments_only = getattr(self, "code_scope", "comments-and-strings") == "comments"
+        python_docstrings = (
+            self._find_python_docstrings(lines) if comments_only and suffix == ".py" else {}
+        )
+        for line_number, line in enumerate(lines, start=1):
+            if line_number in python_docstrings:
+                template = self._translate_python_docstring_line(
+                    line,
+                    line_number,
+                    python_docstrings[line_number],
+                    defer,
+                )
+            elif comments_only:
+                template, in_block_comment = self._translate_comment_only_line(
+                    line,
+                    suffix,
+                    in_block_comment,
+                    defer,
+                )
+            else:
+                template = self._translate_source_line(line, suffix, defer)
+            templates.append(template)
+        if not deferred:
+            return templates
 
-        # Chunk at 20 lines to keep request size manageable for self-hosted engines
-        MAX_LINES_PER_BATCH = 20
-        for chunk_start in range(0, len(batch_to_translate), MAX_LINES_PER_BATCH):
-            chunk = batch_to_translate[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
-            chunk_idx = batch_indices[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
-            chunk_indent = batch_indents[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
-            joined = "\n|||SEP|||\n".join(chunk)
-            try:
-                translated = self._translate_preserving_tokens(joined)
-                parts = translated.split("|||SEP|||")
-                for idx, part, indent in zip(chunk_idx, parts, chunk_indent):
-                    cleaned = part.strip()
-                    if cleaned:
-                        translated_lines[idx] = " " * indent + cleaned
-            except Exception as e:
-                logger.warning(f"Line translation failed: {e}")
+        translated = self._translate_many(deferred)
+        replacements = {
+            markers_by_text[original]: value.replace("\r", " ").replace("\n", " ")
+            for original, value in zip(deferred, translated)
+        }
+        return [self._replace_translation_markers(template, replacements) for template in templates]
 
-        return translated_lines
+    @staticmethod
+    def _find_python_docstrings(lines: list[str]) -> dict[int, tuple[int, int, int, str]]:
+        """Map Python docstring lines using AST positions, excluding ordinary strings."""
+        import ast
+
+        try:
+            tree = ast.parse("\n".join(lines))
+        except SyntaxError:
+            return {}
+
+        positions: dict[int, tuple[int, int, int, str]] = {}
+        owners = [tree]
+        owners.extend(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        )
+        for owner in owners:
+            body = getattr(owner, "body", [])
+            if not body:
+                continue
+            expression = body[0]
+            value = getattr(expression, "value", None)
+            if not isinstance(expression, ast.Expr) or not isinstance(value, ast.Constant):
+                continue
+            if not isinstance(value.value, str):
+                continue
+
+            start = expression.lineno
+            end = getattr(expression, "end_lineno", start)
+            column = expression.col_offset
+            opening_line = lines[start - 1]
+            quote_match = re.search(r"(?:[rRuUbBfF]*)(?P<quote>\"\"\"|''')", opening_line[column:])
+            if not quote_match:
+                continue
+            quote = quote_match.group("quote")
+            quote_column = column + quote_match.start("quote")
+            for line_number in range(start, end + 1):
+                positions[line_number] = (start, end, quote_column, quote)
+        return positions
+
+    def _translate_python_docstring_line(
+        self,
+        line: str,
+        line_number: int,
+        position: tuple[int, int, int, str],
+        translate_span,
+    ) -> str:
+        """Translate a Python docstring body while preserving prefixes and quotes."""
+        start, end, quote_column, quote = position
+
+        def translate_body(body: str) -> str:
+            if not _has_cjk_ideograph(body):
+                return body
+            match = re.match(r"(?P<prefix>\s*)(?P<body>.*?)(?P<suffix>\s*)$", body)
+            if not match:
+                return body
+            translated = (
+                match.group("prefix")
+                + self._translate_preserving_tokens(
+                    match.group("body"), translate_span=translate_span
+                )
+                + match.group("suffix")
+            )
+            if "__REPO_TRANSLATOR_SPAN_" in translated:
+                tag = "TRIPLE_DOUBLE" if quote == '"""' else "TRIPLE_SINGLE"
+                translated = re.sub(
+                    r"(__REPO_TRANSLATOR_SPAN_\d{8}__)",
+                    rf"\1__QUOTE_{tag}__",
+                    translated,
+                )
+            return translated
+
+        if start == end:
+            body_start = quote_column + len(quote)
+            body_end = line.rfind(quote, body_start)
+            if body_end < body_start:
+                return line
+            return line[:body_start] + translate_body(line[body_start:body_end]) + line[body_end:]
+        if line_number == start:
+            body_start = quote_column + len(quote)
+            return line[:body_start] + translate_body(line[body_start:])
+        if line_number == end:
+            body_end = line.rfind(quote)
+            if body_end < 0:
+                return line
+            return translate_body(line[:body_end]) + line[body_end:]
+        return translate_body(line)
+
+    def _translate_comment_only_line(
+        self,
+        line: str,
+        suffix: str,
+        in_block_comment: bool,
+        translate_span,
+    ) -> tuple[str, bool]:
+        """Translate line and C-style block comments without touching literals."""
+
+        def translate_body(body: str) -> str:
+            if not _has_cjk_ideograph(body):
+                return body
+            match = re.match(r"(?P<prefix>\s*\*?\s*)(?P<body>.*?)(?P<suffix>\s*)$", body)
+            if not match or not _has_cjk_ideograph(match.group("body")):
+                return body
+            return (
+                match.group("prefix")
+                + self._translate_preserving_tokens(
+                    match.group("body"), translate_span=translate_span
+                )
+                + match.group("suffix")
+            )
+
+        if in_block_comment:
+            end = line.find("*/")
+            if end < 0:
+                return translate_body(line), True
+            return translate_body(line[:end]) + line[end:], False
+
+        start = self._find_block_comment_start(line)
+        if start is None:
+            return self._translate_source_line(line, suffix, translate_span), False
+
+        end = line.find("*/", start + 2)
+        if end < 0:
+            return line[: start + 2] + translate_body(line[start + 2 :]), True
+        return (
+            line[: start + 2] + translate_body(line[start + 2 : end]) + line[end:],
+            False,
+        )
+
+    def _translate_source_line(self, line: str, suffix: str, translate_span=None) -> str:
+        if not _has_cjk_ideograph(line):
+            return line
+        translate_span = translate_span or self._translate_text_span
+
+        # Whole-line and inline block comments.
+        for pattern in (
+            r"^(?P<prefix>\s*/\*+\s*)(?P<body>.*?)(?P<suffix>\s*\*/\s*)$",
+            r"^(?P<prefix>\s*<!--\s*)(?P<body>.*?)(?P<suffix>\s*-->\s*)$",
+            r"^(?P<prefix>\s*\*+\s*)(?P<body>.*?)(?P<suffix>\s*)$",
+        ):
+            match = re.match(pattern, line)
+            if match and _has_cjk_ideograph(match.group("body")):
+                return (
+                    match.group("prefix")
+                    + self._translate_preserving_tokens(
+                        match.group("body"), translate_span=translate_span
+                    )
+                    + match.group("suffix")
+                )
+
+        comment_start = self._find_line_comment_start(line, suffix)
+        translated_comment = ""
+        if comment_start is not None:
+            marker_length = 2 if line.startswith("//", comment_start) else 1
+            body_start = comment_start + marker_length
+            body = line[body_start:]
+            if _has_cjk_ideograph(body):
+                spacing = re.match(r"(?P<prefix>\s*)(?P<body>.*?)(?P<suffix>\s*)$", body)
+                if spacing:
+                    translated_comment = (
+                        spacing.group("prefix")
+                        + self._translate_preserving_tokens(
+                            spacing.group("body"), translate_span=translate_span
+                        )
+                        + spacing.group("suffix")
+                    )
+                else:
+                    translated_comment = self._translate_preserving_tokens(
+                        body, translate_span=translate_span
+                    )
+                line = line[:body_start]
+
+        if getattr(self, "code_scope", "comments-and-strings") == "comments":
+            return line + translated_comment
+
+        replacements: list[tuple[int, int, str]] = []
+
+        # Quoted values. Backtick/template strings are deliberately skipped because
+        # interpolation makes safe reconstruction language-specific.
+        for match in QUOTED_STRING_PATTERN.finditer(line):
+            group_name = "double" if match.group("double") is not None else "single"
+            body = match.group(group_name)
+            if not _has_cjk_ideograph(body):
+                continue
+            translated = self._translate_preserving_tokens(body, translate_span=translate_span)
+            quote = '"' if group_name == "double" else "'"
+            if "__REPO_TRANSLATOR_SPAN_" in translated:
+                tag = "DOUBLE" if quote == '"' else "SINGLE"
+                translated = re.sub(
+                    r"(__REPO_TRANSLATOR_SPAN_\d{8}__)",
+                    rf"\1__QUOTE_{tag}__",
+                    translated,
+                )
+            else:
+                translated = translated.replace(quote, f"\\{quote}")
+            replacements.append((match.start(group_name), match.end(group_name), translated))
+
+        # Plain HTML/JSX text nodes such as <span>中文</span>.
+        for match in re.finditer(r">(?P<body>[^<>{}]+)<", line):
+            body = match.group("body")
+            if not _has_cjk_ideograph(body):
+                continue
+            replacements.append(
+                (
+                    match.start("body"),
+                    match.end("body"),
+                    self._translate_preserving_tokens(body, translate_span=translate_span),
+                )
+            )
+
+        for start, end, translated in sorted(replacements, reverse=True):
+            line = line[:start] + translated + line[end:]
+        return line + translated_comment
+
+    @staticmethod
+    def _find_block_comment_start(line: str) -> int | None:
+        """Find a C-style block-comment opener outside quoted strings."""
+        quote = None
+        escaped = False
+        index = 0
+        while index < len(line) - 1:
+            char = line[index]
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif quote:
+                if char == quote:
+                    quote = None
+            elif char in {'"', "'", "`"}:
+                quote = char
+            elif line.startswith("/*", index):
+                return index
+            index += 1
+        return None
+
+    @staticmethod
+    def _find_line_comment_start(line: str, suffix: str) -> int | None:
+        """Find a line-comment marker that is outside quoted strings."""
+        hash_comment_suffixes = {
+            "",
+            ".py",
+            ".sh",
+            ".bash",
+            ".zsh",
+            ".fish",
+            ".r",
+            ".yaml",
+            ".yml",
+            ".toml",
+            ".ini",
+            ".cfg",
+            ".conf",
+            ".env",
+        }
+        quote = None
+        escaped = False
+        index = 0
+        while index < len(line):
+            char = line[index]
+            if escaped:
+                escaped = False
+                index += 1
+                continue
+            if char == "\\":
+                escaped = True
+                index += 1
+                continue
+            if quote:
+                if char == quote:
+                    quote = None
+                index += 1
+                continue
+            if char in {'"', "'", "`"}:
+                quote = char
+                index += 1
+                continue
+            if line.startswith("//", index):
+                return index
+            if char == "#" and suffix in hash_comment_suffixes:
+                if index == 0 and line.startswith("#!"):
+                    return None
+                return index
+            index += 1
+        return None
 
     def _translate_markdown(self, content: str) -> str:
         """Translate markdown prose without touching code, URLs, or placeholders.
         Batches all translatable lines into a single API call for speed.
         """
         lines = content.splitlines(keepends=True)
-        in_fence = False
+        fence_marker = None
         is_cjk_source = getattr(self, "source_lang", "zh") in ("zh", "ja", "ko")
 
-        # Collect lines to translate; leave placeholders for non-translatable ones
-        batch_indices = []  # positions in result list
-        batch_bodies = []  # line bodies (without trailing newline)
-        result = []  # placeholder: None for lines to translate, str for kept-as-is
+        batch_entries: list[tuple[int, str, str]] = []
+        batch_bodies: list[str] = []
+        result: list[str | None] = []
 
         for line in lines:
             stripped = line.lstrip()
-            if stripped.startswith("```"):
+            marker_match = re.match(r"(`{3,}|~{3,})", stripped)
+            if marker_match:
                 result.append(line)
-                in_fence = not in_fence
+                marker = marker_match.group(1)[0]
+                fence_marker = None if fence_marker == marker else marker
                 continue
 
-            if in_fence:
+            if fence_marker:
                 result.append(line)
                 continue
 
@@ -559,26 +979,48 @@ class RepoTranslator:
                 result.append(line)
                 continue
 
-            line_body = line.removesuffix("\n")
-            # Don't translate yet — batch it
-            batch_indices.append(len(result))
-            batch_bodies.append(line_body)
+            line_body = line.rstrip("\r\n")
+            newline = line[len(line_body) :]
+
+            # Markdown table delimiters are structural. Translate cells separately
+            # while keeping every pipe byte-for-byte.
+            if "|" in line_body and line_body.strip().startswith("|"):
+                if re.match(r"^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$", line_body):
+                    result.append(line)
+                    continue
+                cells = line_body.split("|")
+                translated_cells = [
+                    self._translate_preserving_tokens(cell) if _has_cjk_ideograph(cell) else cell
+                    for cell in cells
+                ]
+                result.append("|".join(translated_cells) + newline)
+                continue
+
+            prefix_match = re.match(
+                r"^(?P<prefix>\s*(?:#{1,6}\s+|>\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)?)",
+                line_body,
+            )
+            prefix = prefix_match.group("prefix") if prefix_match else ""
+            body = line_body[len(prefix) :]
+            if not body.strip():
+                result.append(line)
+                continue
+
+            batch_entries.append((len(result), prefix, newline))
+            batch_bodies.append(body)
             result.append(None)  # placeholder, filled after batch translate
 
-        if not batch_indices:
+        if not batch_entries:
             return content
 
-        # Chunk at 20 lines to keep request size manageable
-        MAX_LINES_PER_BATCH = 20
-        for chunk_start in range(0, len(batch_indices), MAX_LINES_PER_BATCH):
-            chunk_idx = batch_indices[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
-            chunk_bodies = batch_bodies[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
-            joined = "\n|||SEP|||\n".join(chunk_bodies)
-            translated_joined = self._translate_preserving_tokens(joined)
-            parts = translated_joined.split("|||SEP|||")
-            for idx, part in zip(chunk_idx, parts):
-                cleaned = part.strip()
-                result[idx] = (cleaned if cleaned else "") + "\n"
+        max_lines_per_batch = max(1, min(getattr(self, "batch_size", 40), 40))
+        for chunk_start in range(0, len(batch_entries), max_lines_per_batch):
+            chunk_entries = batch_entries[chunk_start : chunk_start + max_lines_per_batch]
+            chunk_bodies = batch_bodies[chunk_start : chunk_start + max_lines_per_batch]
+            translated_bodies = self._translate_many_preserving_tokens(chunk_bodies)
+            for (idx, prefix, newline), translated_body in zip(chunk_entries, translated_bodies):
+                cleaned = translated_body.strip()
+                result[idx] = prefix + cleaned + newline
 
         return "".join(result)
 
@@ -601,21 +1043,91 @@ class RepoTranslator:
         indent = 2 if "\n" in content else None
         return json.dumps(translated, ensure_ascii=False, indent=indent)
 
-    def _translate_preserving_tokens(self, text: str) -> str:
+    def _translate_many_preserving_tokens(self, texts: list[str]) -> list[str]:
+        """Batch human-readable spans while preserving repository-specific tokens."""
+        deferred: list[str] = []
+        templates = []
+
+        def defer(text: str) -> str:
+            marker = f"__REPO_TRANSLATOR_SPAN_{len(deferred):08d}__"
+            deferred.append(text)
+            return marker
+
+        for text in texts:
+            templates.append(self._translate_preserving_tokens(text, translate_span=defer))
+
+        translated = self._translate_many(deferred)
+        replacements = {
+            f"__REPO_TRANSLATOR_SPAN_{index:08d}__": value for index, value in enumerate(translated)
+        }
+        return [self._replace_translation_markers(template, replacements) for template in templates]
+
+    @staticmethod
+    def _replace_translation_markers(text: str, replacements: dict[str, str]) -> str:
+        for marker, translated in replacements.items():
+            text = text.replace(
+                f"{marker}__QUOTE_DOUBLE__",
+                translated.replace('"', '\\"'),
+            )
+            text = text.replace(
+                f"{marker}__QUOTE_SINGLE__",
+                translated.replace("'", "\\'"),
+            )
+            text = text.replace(
+                f"{marker}__QUOTE_TRIPLE_DOUBLE__",
+                translated.replace('"""', '\\"""'),
+            )
+            text = text.replace(
+                f"{marker}__QUOTE_TRIPLE_SINGLE__",
+                translated.replace("'''", "\\'''"),
+            )
+            text = text.replace(marker, translated)
+        return text
+
+    def _translate_many(self, texts: list[str]) -> list[str]:
+        """Translate spans using native provider batches, with one retry per batch."""
+        if not texts:
+            return []
+
+        results = []
+        batch_size = max(1, getattr(self, "batch_size", 40))
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start : start + batch_size]
+            translate_batch = getattr(self.translator, "translate_batch", None)
+            if translate_batch is None:
+
+                def translate_batch(values):
+                    return [self.translator.translate_text(value) for value in values]
+
+            try:
+                translated = translate_batch(batch)
+            except Exception as error:
+                logger.warning(f"Retry batch after error: {error}")
+                translated = translate_batch(batch)
+            if len(translated) != len(batch):
+                raise ValueError(
+                    f"Translation provider returned {len(translated)} results "
+                    f"for {len(batch)} inputs"
+                )
+            results.extend(translated)
+        return results
+
+    def _translate_preserving_tokens(self, text: str, translate_span=None) -> str:
         """Translate unprotected spans and reassemble protected technical tokens unchanged."""
         if not text.strip():
             return text
+        translate_span = translate_span or self._translate_text_span
 
         pieces = []
         last = 0
         for match in PROTECTED_TOKEN_PATTERN.finditer(text):
             if match.start() > last:
-                pieces.append(self._translate_text_span(text[last : match.start()]))
+                pieces.append(translate_span(text[last : match.start()]))
             pieces.append(match.group(0))
             last = match.end()
 
         if last < len(text):
-            pieces.append(self._translate_text_span(text[last:]))
+            pieces.append(translate_span(text[last:]))
 
         return "".join(pieces)
 
@@ -668,7 +1180,7 @@ class RepoTranslator:
         return report
 
     def push(self, directory: Path, repo_name: str, token: str | None = None) -> str:
-        """Push translated files to GitHub."""
+        """Commit on a translation branch and push without persisting credentials."""
         import git
 
         token = token or os.environ.get("GITHUB_TOKEN", "")
@@ -677,29 +1189,39 @@ class RepoTranslator:
 
         console.print(f"\n📤 Pushing to [cyan]{repo_name}[/cyan]...")
 
-        # Setup git
         repo = git.Repo(directory)
+        branch_name = f"repo-translator/{self.target_lang}"
 
-        # Configure remote with token
-        remote_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
+        if branch_name in {head.name for head in repo.heads}:
+            repo.heads[branch_name].checkout()
+        else:
+            repo.create_head(branch_name).checkout()
 
-        # Remove existing remotes
-        for remote in repo.remotes:
-            repo.delete_remote(remote)
-
-        origin = repo.create_remote("origin", remote_url)
-
-        # Stage all
         repo.git.add(A=True)
+        if repo.is_dirty(index=True, working_tree=True, untracked_files=True):
+            repo.index.commit(
+                f"Translate {self.source_lang} → {self.target_lang} using repo-translator"
+            )
 
-        # Commit
-        repo.index.commit(
-            f"Translate {self.source_lang} → {self.target_lang} using repo-translator"
-        )
+        remote_url = f"https://github.com/{repo_name}.git"
+        with tempfile.TemporaryDirectory(prefix="repo-translator-auth-") as auth_dir:
+            askpass = Path(auth_dir) / "askpass.sh"
+            askpass.write_text(
+                "#!/bin/sh\n"
+                'case "$1" in\n'
+                '  *Username*) printf "%s\\n" "x-access-token" ;;\n'
+                '  *) printf "%s\\n" "$REPO_TRANSLATOR_GITHUB_TOKEN" ;;\n'
+                "esac\n",
+                encoding="utf-8",
+            )
+            askpass.chmod(0o700)
+            with repo.git.custom_environment(
+                GIT_ASKPASS=str(askpass),
+                GIT_TERMINAL_PROMPT="0",
+                REPO_TRANSLATOR_GITHUB_TOKEN=token,
+            ):
+                repo.git.push(remote_url, f"{branch_name}:refs/heads/{branch_name}")
 
-        # Push
-        origin.push(refspec="main:main", force=True)
-
-        push_url = f"https://github.com/{repo_name}"
+        push_url = f"https://github.com/{repo_name}/tree/{branch_name}"
         console.print(f"   ✅ Pushed to {push_url}")
         return push_url

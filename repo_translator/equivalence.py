@@ -237,6 +237,8 @@ def _file_manifest(root: Path) -> dict[str, Path]:
     for path in root.rglob("*"):
         if path.is_dir():
             continue
+        if path.name == ".repo-translator-state.json":
+            continue
         if any(part in SKIP_DIRS for part in path.relative_to(root).parts):
             continue
         rel_path = path.relative_to(root).as_posix()
