@@ -14,10 +14,14 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      libretranslate:
+      libre-1:
         image: libretranslate/libretranslate:latest
         ports:
           - 5000:5000
+      libre-2:
+        image: libretranslate/libretranslate:latest
+        ports:
+          - 5001:5000
 
     steps:
       - uses: actions/checkout@v4
@@ -36,14 +40,16 @@ jobs:
 
       - name: Wait for LibreTranslate
         run: |
-          echo "Waiting for LibreTranslate..."
-          for i in $(seq 30); do
-            if curl -sf http://localhost:5000/languages >/dev/null 2>&1; then
-              echo "LibreTranslate ready"
-              break
-            fi
-            echo "Attempt $i: not ready yet, sleeping 10s..."
-            sleep 10
+          for port in 5000 5001; do
+            echo "Waiting for LibreTranslate on :$port..."
+            for i in $(seq 30); do
+              if curl -sf http://localhost:$port/languages >/dev/null 2>&1; then
+                echo "LibreTranslate on :$port ready"
+                break
+              fi
+              echo "Attempt $i: not ready yet, sleeping 10s..."
+              sleep 10
+            done
           done
 
       - name: Clone retain-pdf
@@ -56,8 +62,8 @@ jobs:
             --repo ../retain-pdf \
             --source-lang zh \
             --target-lang en \
-            --translator libre \
-            --base-url http://localhost:5000 \
+            --translator libre,libre \
+            --base-url http://localhost:5000,http://localhost:5001 \
             --output-dir ../retain-pdf-en \
             --translate-code \
             --code-scope comments \
@@ -70,7 +76,7 @@ jobs:
             --exclude '**/tests/**' \
             --exclude '**/*.test.*' \
             --exclude '**/fixtures/**' \
-            --workers 4 \
+            --workers 8 \
             --batch-size 40
 
       - name: Upload translated code
