@@ -55,9 +55,11 @@ jobs:
       - name: Clone retain-pdf
         run: git clone https://github.com/wxyhgk/retain-pdf.git
 
-      - name: Translate code comments
+      - name: Translate code comments and strings
         run: |
           cd repo-translator
+          echo "⚠️ comments-and-strings mode — translates UI labels and error messages."
+          echo "   Strings used at runtime WILL be changed. Review before merging."
           repo-translator translate \
             --repo ../retain-pdf \
             --source-lang zh \
@@ -66,7 +68,7 @@ jobs:
             --base-url http://localhost:5000,http://localhost:5001 \
             --output-dir ../retain-pdf-en \
             --translate-code \
-            --code-scope comments \
+            --code-scope comments-and-strings \
             --include 'backend/**/*.py' \
             --include 'backend/**/*.rs' \
             --include 'frontend/**/*.ts' \
