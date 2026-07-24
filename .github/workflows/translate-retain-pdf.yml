@@ -2,6 +2,11 @@ name: Translate retain-pdf (zh→en comments)
 
 on:
   workflow_dispatch:
+    inputs:
+      fresh:
+        description: 'Fresh run — ignore translation resume cache'
+        type: boolean
+        default: false
   schedule:
     - cron: '0 0 * * 0'  # weekly Sunday midnight
 
@@ -39,7 +44,7 @@ jobs:
         with:
           path: retain-pdf-en/.repo-translator-state.json
           key: translate-retain-pdf-${{ github.run_id }}
-          restore-keys: translate-retain-pdf-
+          restore-keys: ${{ inputs.fresh && 'translate-retain-pdf-fresh' || 'translate-retain-pdf-' }}
 
       - name: Install repo-translator
         run: |
