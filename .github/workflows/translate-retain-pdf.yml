@@ -73,10 +73,13 @@ jobs:
             --include 'backend/**/*.rs' \
             --include 'frontend/**/*.ts' \
             --include 'frontend/**/*.tsx' \
+            --include 'frontend/**/*.mjs' \
+            --include 'frontend/**/*.md' \
             --include 'frontend-react/**/*.ts' \
             --include 'frontend-react/**/*.tsx' \
-            --exclude '**/tests/**' \
-            --exclude '**/*.test.*' \
+            --include 'doc/**/*.md' \
+            --include '*README.md' \
+            --include 'CONTRIBUTING.md' \
             --exclude '**/fixtures/**' \
             --workers 8 \
             --batch-size 40
