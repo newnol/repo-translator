@@ -42,7 +42,7 @@ class LibreTranslate(BaseTranslator):
                 payload["api_key"] = self.api_key
 
             try:
-                r = requests.post(f"{self.base_url}/translate", json=payload, timeout=30)
+                r = requests.post(f"{self.base_url}/translate", json=payload, timeout=60)
                 r.raise_for_status()
                 translated.append(r.json()["translatedText"])
             except Exception as e:

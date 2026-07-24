@@ -496,8 +496,8 @@ class RepoTranslator:
         if not batch_to_translate:
             return translated_lines
 
-        # Chunk at 30 lines to keep request size manageable for self-hosted engines
-        MAX_LINES_PER_BATCH = 30
+        # Chunk at 20 lines to keep request size manageable for self-hosted engines
+        MAX_LINES_PER_BATCH = 20
         for chunk_start in range(0, len(batch_to_translate), MAX_LINES_PER_BATCH):
             chunk = batch_to_translate[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
             chunk_idx = batch_indices[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
@@ -553,8 +553,8 @@ class RepoTranslator:
         if not batch_indices:
             return content
 
-        # Chunk at 30 lines to keep request size manageable
-        MAX_LINES_PER_BATCH = 30
+        # Chunk at 20 lines to keep request size manageable
+        MAX_LINES_PER_BATCH = 20
         for chunk_start in range(0, len(batch_indices), MAX_LINES_PER_BATCH):
             chunk_idx = batch_indices[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
             chunk_bodies = batch_bodies[chunk_start : chunk_start + MAX_LINES_PER_BATCH]
