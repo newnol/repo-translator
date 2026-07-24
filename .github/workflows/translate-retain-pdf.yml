@@ -32,6 +32,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+
+      - name: Cache translation state
+        uses: actions/cache@v4
+        with:
+          path: retain-pdf-en/.repo-translator-state.json
+          key: translate-retain-pdf-${{ github.run_id }}
+          restore-keys: translate-retain-pdf-
 
       - name: Install repo-translator
         run: |
