@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/translators/google.py
+# hypothesis_version: 6.141.1
+
+[0.2, 0.3, 4500, 5000, 'Google Translate', 'he', 'iw', 'jv', 'zh', 'zh-CN', 'zh-TW', 'zh-cn', 'zh-tw']

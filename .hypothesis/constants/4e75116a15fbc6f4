@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/translators/base.py
+# hypothesis_version: 6.141.1
+
+[0.7, 4500, 5000, '()', ';;', '=>', 'def ', 'fn ', 'func ', 'import ', '{', '}']

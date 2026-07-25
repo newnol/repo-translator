@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/translators/llm.py
+# hypothesis_version: 6.141.1
+
+[0.3, 0.5, 120, 4000, 4096, 8000, '/', 'Authorization', 'Content-Type', 'OPENAI_API_KEY', 'application/json', 'choices', 'content', 'gpt-4o-mini', 'llama3.1', 'max_tokens', 'message', 'messages', 'model', 'prompt', 'response', 'role', 'stream', 'system', 'temperature', 'user']

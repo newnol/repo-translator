@@ -125,6 +125,21 @@ def main(verbose):
     help="With --translate-code, translate only comments or comments plus strings",
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be translated without doing it")
+@click.option(
+    "--export-manifest", default=None, type=click.Path(), help="Export a manifest after translation"
+)
+@click.option(
+    "--apply-manifest", default=None, type=click.Path(), help="Apply translations from this manifest instead of translating"
+)
+@click.option(
+    "--translation-memory", default=None, type=click.Path(), help="Path to translation memory JSON file"
+)
+@click.option(
+    "--fail-on-source-mismatch/--skip-on-source-mismatch",
+    default=True,
+    help="Control apply behavior on file hash mismatch (default: fail)",
+)
+@click.option("--audit-untranslated", is_flag=True, help="Run AUDIT stage after translation")
 def translate(
     repo,
     source_lang,
@@ -158,8 +173,33 @@ def translate(
     translate_code,
     code_scope,
     dry_run,
+    export_manifest,
+    apply_manifest,
+    translation_memory,
+    fail_on_source_mismatch,
+    audit_untranslated,
 ):
     """Translate a repository from one language to another."""
+
+    # --- Manifest flag validation ---
+    # The flag pair --fail-on-source-mismatch/--skip-on-source-mismatch maps to a
+    # single bool in Click, so mutual exclusivity is inherently handled. No extra
+    # check needed.
+
+    if apply_manifest is not None:
+        manifest_path = Path(apply_manifest)
+        if not manifest_path.is_file():
+            console.print(
+                f"[red]❌ --apply-manifest: file not found or not readable: {apply_manifest}[/red]"
+            )
+            sys.exit(1)
+        try:
+            manifest_path.read_bytes()[:1]
+        except OSError as e:
+            console.print(
+                f"[red]❌ --apply-manifest: cannot read manifest: {e}[/red]"
+            )
+            sys.exit(1)
 
     console.print(
         Panel.fit(
@@ -213,6 +253,11 @@ def translate(
         dry_run=dry_run,
         verbose=main.context_settings.get("verbose", False),
         max_workers=workers,
+        export_manifest_path=export_manifest,
+        apply_manifest_path=apply_manifest,
+        translation_memory_path=translation_memory,
+        fail_on_source_mismatch=fail_on_source_mismatch,
+        audit_untranslated=audit_untranslated,
     )
 
     # Run pipeline
@@ -367,9 +412,16 @@ def verify(
 
     from .equivalence import verify_equivalence
 
+    source_path = Path(source)
+    target_path = Path(target)
+    for label, p in [("source", source_path), ("target", target_path)]:
+        if not p.exists() or not p.is_dir():
+            console.print(f"[red]❌ VERIFY failed: {label} repo is unreadable: {p}[/red]")
+            sys.exit(1)
+
     report = verify_equivalence(
-        source_dir=Path(source),
-        target_dir=Path(target),
+        source_dir=source_path,
+        target_dir=target_path,
         ai_check=ai_check,
         ai_engine=ai_provider,
         ai_api_key=api_key,
@@ -427,6 +479,142 @@ def push(dir, repo, token):
     translator = RepoTranslator()
     url = translator.push(Path(dir), repo, token)
     console.print(f"✅ Pushed to {url}")
+
+
+# ---------------------------------------------------------------------------
+# Manifest pipeline subcommands
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.option("--repo", "-r", required=True, help="Source repo directory")
+@click.option("--output-dir", "-o", default=".", help="Where to write manifest artifacts")
+@click.option("--source-lang", "-s", default="zh", help="Source language (default: zh)")
+@click.option("--target-lang", "-t", default="en", help="Target language (default: en)")
+@click.option("--translate-code/--docs-only", default=False, help="Include code strings")
+@click.option("--include", "include_patterns", multiple=True, help="Include glob patterns")
+@click.option("--exclude", "exclude_patterns", multiple=True, help="Exclude glob patterns")
+def extract(repo, output_dir, source_lang, target_lang, translate_code, include_patterns, exclude_patterns):
+    """EXTRACT stage: walk a repo and write a translation manifest."""
+    from .extractors.base import ExtractionReport, extract_repo
+    from .manifest import Manifest
+    from .segments import ManifestHeader
+
+    root = Path(repo).resolve()
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    manifest_path = out / "translation-manifest.jsonl"
+
+    header = ManifestHeader(
+        source_lang=source_lang,
+        target_lang=target_lang,
+        repo_root=str(root),
+    )
+    report = ExtractionReport()
+    man = Manifest.open_for_write(manifest_path, header)
+    for seg in extract_repo(
+        root,
+        include_patterns=list(include_patterns) or None,
+        exclude_patterns=list(exclude_patterns) or None,
+        translate_code=translate_code,
+        report=report,
+    ):
+        man.append(seg)
+    man.finalize()
+
+    console.print(f"✅ Extracted {man._count} segments → {manifest_path}")
+    if report.fallback_files:
+        console.print(f"⚠️  {len(report.fallback_files)} file(s) used regex fallback")
+
+
+@main.command(name="translate-manifest")
+@click.option("--manifest", "-m", required=True, help="Path to translation-manifest.jsonl")
+@click.option("--translator", default="google", help="Translation engine")
+@click.option("--api-key", envvar="TRANSLATOR_API_KEY", default=None, help="API key")
+@click.option("--translation-memory", default=None, help="Path to translation-memory.json")
+@click.option("--batch-size", default=40, type=click.IntRange(1, 100), help="Batch size (1-100)")
+def translate_manifest_cmd(manifest, translator, api_key, translation_memory, batch_size):
+    """TRANSLATE-MANIFEST stage: fill target text in a manifest."""
+    from .manifest import load_memory, translate_manifest
+    from .translators import get_translator
+
+    manifest_path = Path(manifest)
+    memory_path = Path(translation_memory) if translation_memory else None
+    memory = load_memory(memory_path)
+
+    # Read header to get source/target lang
+    from .manifest import Manifest as _M
+    header, _ = _M.read(manifest_path)
+
+    tr = get_translator(
+        engine=translator,
+        source_lang=header.source_lang,
+        target_lang=header.target_lang,
+        api_key=api_key,
+    )
+
+    stats = translate_manifest(
+        manifest_path,
+        tr,
+        memory=memory,
+        memory_path=memory_path,
+        batch_size=batch_size,
+    )
+
+    console.print(
+        f"✅ Translated {stats.segments_translated}/{stats.segments_total} segments "
+        f"({stats.segments_from_memory} from memory, {stats.segments_from_provider} from provider)"
+    )
+
+
+@main.command()
+@click.option("--manifest", "-m", required=True, help="Path to translation-manifest.jsonl")
+@click.option("--repo", "-r", required=True, help="Source repo (offsets relative to it)")
+@click.option("--output-dir", "-o", required=True, help="Output directory")
+@click.option("--fail-on-source-mismatch/--skip-on-source-mismatch", default=True, help="Hash guard behavior")
+def apply(manifest, repo, output_dir, fail_on_source_mismatch):
+    """APPLY stage: splice translations into a copy of the source repo."""
+    from .applicator import apply_manifest
+
+    stats = apply_manifest(
+        manifest_path=Path(manifest),
+        source_root=Path(repo),
+        output_root=Path(output_dir),
+        fail_on_source_mismatch=fail_on_source_mismatch,
+    )
+
+    console.print(
+        f"✅ Applied {stats.segments_applied} segments across {stats.files_spliced} files"
+    )
+    if stats.files_skipped_mismatch:
+        console.print(f"⚠️  {stats.files_skipped_mismatch} file(s) skipped (hash mismatch)")
+
+
+@main.command()
+@click.option("--dir", "-d", "directory", required=True, help="Directory to audit")
+@click.option("--include", "include_patterns", multiple=True, help="Include glob patterns")
+@click.option("--exclude", "exclude_patterns", multiple=True, help="Exclude glob patterns")
+def audit(directory, include_patterns, exclude_patterns):
+    """AUDIT stage: scan for residual CJK in translated output."""
+    from .audit import audit_repo
+
+    report = audit_repo(
+        Path(directory),
+        include_patterns=list(include_patterns) or None,
+        exclude_patterns=list(exclude_patterns) or None,
+    )
+
+    if report.total_findings == 0:
+        console.print("✅ No residual CJK found")
+    else:
+        console.print(
+            f"⚠️  {report.total_findings} residual finding(s) in "
+            f"{report.files_with_residual} file(s)"
+        )
+        for f in report.findings[:20]:
+            console.print(f"  {f.path}:{f.line} — {f.snippet[:80]}")
+        if len(report.findings) > 20:
+            console.print(f"  … and {len(report.findings) - 20} more")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/translators/__init__.py
+# hypothesis_version: 6.141.1
+
+[',', ', ', 'deepl', 'google', 'google-alt', 'gpt-4o-mini', 'libre', 'llama3.1', 'mymemory', 'ollama', 'openai']
