@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/reviewers/__init__.py
+# hypothesis_version: 6.141.1
+
+[0.1, 0.15, 0.5, 100.0, 1000, 3000, '...', '.md', 'AI_GATEWAY_API_KEY', 'Authorization', 'Content-Type', 'OPENAI_API_KEY', '```(\\w+)?', 'ai-gateway', 'application/json', 'broken_format', 'choices', 'content', 'en', 'error', 'file', 'files_reviewed', 'gpt-4o-mini', 'ignore', 'info', 'issues', 'json_object', 'line', 'max_tokens', 'message', 'messages', 'model', 'openai', 'openai/gpt-4o-mini', 'original', 'other', 'response_format', 'role', 'score', 'severity', 'suggestion', 'system', 'temperature', 'total_issues', 'translated', 'type', 'untranslated', 'user', 'utf-8', 'vercel', 'vercel-ai-gateway', 'warning', 'zh', '📊 Review Report']

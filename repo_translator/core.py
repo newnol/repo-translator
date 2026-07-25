@@ -122,6 +122,12 @@ class RepoTranslator:
         code_scope: str = "comments-and-strings",
         dry_run: bool = False,
         verbose: bool = False,
+        # Manifest pipeline hooks (additive, all default to no-op)
+        export_manifest_path: str | None = None,
+        apply_manifest_path: str | None = None,
+        translation_memory_path: str | None = None,
+        fail_on_source_mismatch: bool = True,
+        audit_untranslated: bool = False,
     ):
         if code_scope not in {"comments", "comments-and-strings"}:
             raise ValueError("code_scope must be 'comments' or 'comments-and-strings'")
@@ -168,6 +174,13 @@ class RepoTranslator:
                 base_url=review_base_url,
                 sample_rate=review_sample_rate,
             )
+
+        # Manifest pipeline hooks
+        self.export_manifest_path = export_manifest_path
+        self.apply_manifest_path = apply_manifest_path
+        self.translation_memory_path = translation_memory_path
+        self.fail_on_source_mismatch = fail_on_source_mismatch
+        self.audit_untranslated = audit_untranslated
 
         self.stats = TranslationStats()
 
@@ -216,8 +229,36 @@ class RepoTranslator:
                     "Review and verification require an output directory separate from source"
                 )
 
-            # Step 2: Translate
-            if output_dir and repo_url:
+            # Step 2: Translate (or apply manifest)
+            if self.apply_manifest_path:
+                # --- Apply mode: splice from manifest instead of live translation ---
+                from .applicator import apply_manifest, ApplyError
+
+                manifest_p = Path(self.apply_manifest_path)
+                if not manifest_p.exists():
+                    raise ValueError(
+                        f"Apply manifest not found: {manifest_p}"
+                    )
+                try:
+                    from .manifest import Manifest
+                    Manifest.read(manifest_p)  # validate readability
+                except Exception as e:
+                    raise ValueError(
+                        f"Apply manifest invalid: {manifest_p}: {e}"
+                    ) from e
+
+                if not output_dir:
+                    raise ValueError(
+                        "--apply-manifest requires an output directory"
+                    )
+                dest_dir = Path(output_dir)
+                apply_manifest(
+                    manifest_p,
+                    source_dir,
+                    dest_dir,
+                    fail_on_source_mismatch=self.fail_on_source_mismatch,
+                )
+            elif output_dir and repo_url:
                 dest_dir = Path(output_dir)
                 self.translate(source_dir, dest_dir)
             elif output_dir:
@@ -229,6 +270,48 @@ class RepoTranslator:
             else:
                 dest_dir = source_dir
                 self.translate_in_place(dest_dir)
+
+            # Export manifest (after translation completes)
+            if self.export_manifest_path and not self.apply_manifest_path:
+                try:
+                    from .extractors.base import extract_repo
+                    from .manifest import Manifest, ManifestHeader
+
+                    manifest_out = Path(self.export_manifest_path)
+                    header = ManifestHeader(
+                        source_lang=self.source_lang,
+                        target_lang=self.target_lang,
+                        repo_root=str(dest_dir),
+                    )
+                    man = Manifest.open_for_write(manifest_out, header)
+                    for seg in extract_repo(
+                        dest_dir,
+                        include_patterns=self.include_patterns,
+                        exclude_patterns=self.exclude_patterns,
+                        translate_code=self.translate_code,
+                        source_is_cjk=(self.source_lang in ("zh", "ja", "ko")),
+                    ):
+                        man.append(seg)
+                    man.finalize()
+                except Exception as e:
+                    logger.error(f"Failed to export manifest: {e}")
+                    # Don't corrupt translated output — just log the error
+
+            # Audit untranslated (after translate/apply)
+            if self.audit_untranslated:
+                from .audit import audit_repo
+
+                audit_report = audit_repo(
+                    dest_dir,
+                    include_patterns=self.include_patterns,
+                    exclude_patterns=self.exclude_patterns,
+                )
+                result["audit"] = audit_report
+                if audit_report.total_findings:
+                    console.print(
+                        f"   ⚠️  {audit_report.total_findings} residual CJK "
+                        f"finding(s) in {audit_report.files_with_residual} file(s)"
+                    )
 
             # Step 3: AI Review (optional)
             if self.reviewer:

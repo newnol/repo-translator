@@ -1,0 +1,850 @@
+{
+  "pbtResults": {
+    "1.3 Write property test for translation-key and segment-id derivation": {
+      "status": "passed",
+      "lastRunTimestamp": 1784917526859
+    },
+    "1.5 Write property test for `build_segment` byte round-trip": {
+      "status": "passed",
+      "lastRunTimestamp": 1784917536532
+    },
+    "2.5 Write property test for translation-memory persistence round-trip": {
+      "status": "passed",
+      "lastRunTimestamp": 1784917731970
+    },
+    "2.3 Write property test for manifest serialize/deserialize round-trip": {
+      "status": "passed",
+      "lastRunTimestamp": 1784917750481
+    },
+    "4.3 Write property test for descending-order splice equivalence": {
+      "status": "passed",
+      "lastRunTimestamp": 1784917952968
+    },
+    "4.2 Write property test for round-trip extract+apply identity": {
+      "status": "passed",
+      "lastRunTimestamp": 1784917971626
+    }
+  },
+  "executionHistory": {
+    "1.1 Create `repo_translator/segments.py` with the `Segment` dataclass, `SegmentKind`, and `ManifestHeader`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917062851
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917074630
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917206288
+      }
+    ],
+    "1.2 Implement `make_segment_id` and `make_translation_key` in `segments.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917062985
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917211630
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917425780
+      }
+    ],
+    "1.3 Write property test for translation-key and segment-id derivation": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063039
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917447038
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917634167
+      }
+    ],
+    "1.4 Implement `build_segment` with byte round-trip enforcement and the line-start byte table helper": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063068
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917212480
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917426746
+      }
+    ],
+    "1.5 Write property test for `build_segment` byte round-trip": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063099
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917447223
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917635006
+      }
+    ],
+    "1.6 Write unit tests for Segment validation and JSON escaping": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063125
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917447393
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917636283
+      }
+    ],
+    "2.1 Create `repo_translator/manifest.py` with `Manifest` read/write and streaming": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063150
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917447608
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917637325
+      }
+    ],
+    "2.2 Implement `rewrite_targets` atomic manifest rewrite in `manifest.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063175
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917643793
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917829098
+      }
+    ],
+    "2.3 Write property test for manifest serialize/deserialize round-trip": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063202
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917644595
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917830047
+      }
+    ],
+    "2.4 Implement `TranslationMemory`, `MemoryEntry`, `load_memory`, `save_memory`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063227
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917447751
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917638368
+      }
+    ],
+    "2.5 Write property test for translation-memory persistence round-trip": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063268
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917645355
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917827936
+      }
+    ],
+    "3. Checkpoint - foundation": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063293
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920806776
+      }
+    ],
+    "4.1 Create `repo_translator/applicator.py` with `apply_manifest` and `ApplyStats`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063319
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917646258
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917826864
+      }
+    ],
+    "4.2 Write property test for round-trip extract+apply identity": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063343
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917840086
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918079417
+      }
+    ],
+    "4.3 Write property test for descending-order splice equivalence": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063374
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917840845
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918080290
+      }
+    ],
+    "4.4 Write unit tests for APPLY guards": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063401
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917841709
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918081075
+      }
+    ],
+    "5. Checkpoint - applicator": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063427
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920807512
+      }
+    ],
+    "6. Implement the extractor registry and EXTRACT stage": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063452
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920808255
+      }
+    ],
+    "6.1 Create `repo_translator/extractors/base.py` with the `Extractor` protocol, `Candidate`, `ExtractionReport`, registry, and `extract_repo`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063477
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917842661
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918082621
+      }
+    ],
+    "6.2 Write unit tests for registry selection, CJK gating, and ExtractionReport": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063513
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918104965
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918533662
+      }
+    ],
+    "6.3 Implement `extractors/markdown.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063544
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918105734
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918534442
+      }
+    ],
+    "6.4 Write unit tests for Markdown extraction": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063573
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918875760
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919630095
+      }
+    ],
+    "6.5 Implement `extractors/python.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063599
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918106438
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918531663
+      }
+    ],
+    "6.6 Write unit tests for Python extraction": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063632
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918876583
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919631682
+      }
+    ],
+    "6.7 Implement `extractors/tree_sitter.py` — PRIMARY code extractor with template-fragment splitting and context-aware rules": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063659
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918877465
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919633540
+      }
+    ],
+    "6.8 Write unit tests for Tree-sitter extraction: template fragments, context rules, and fallback": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063693
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919659092
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920015719
+      }
+    ],
+    "6.9 Implement `extractors/structured_data.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063731
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918578285
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918867803
+      }
+    ],
+    "6.10 Write unit tests for structured-data extraction": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063756
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918878218
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919632439
+      }
+    ],
+    "6.11 Implement `extractors/markup.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063782
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918579096
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918868636
+      }
+    ],
+    "6.12 Write unit tests for markup extraction": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063807
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918879007
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919630910
+      }
+    ],
+    "7. Checkpoint - extractors": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063835
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920809017
+      }
+    ],
+    "8.1 Implement `translate_manifest` and `ManifestStats` in `manifest.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063860
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918107345
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918532556
+      }
+    ],
+    "8.2 Wire provider error handling via existing `_translate_many` semantics": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063886
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919658285
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920019756
+      }
+    ],
+    "8.3 Write unit tests for TRANSLATE-MANIFEST reuse, dedup, and idempotency": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063915
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919660090
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920016437
+      }
+    ],
+    "9.1 Create `repo_translator/audit.py` with `audit_repo` and `AuditReport`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063942
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917843584
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918530887
+      }
+    ],
+    "9.2 Write unit tests for AUDIT": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917063991
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918579870
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918865806
+      }
+    ],
+    "10. Checkpoint - stages complete": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064019
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920809431
+      }
+    ],
+    "11.1 Add `extract`, `translate-manifest`, `apply`, and `audit` subcommands in `cli.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064050
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919661419
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920017516
+      }
+    ],
+    "11.2 Confirm/wire the existing `verify` subcommand as the VERIFY stage": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064073
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784919662797
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920018767
+      }
+    ],
+    "11.3 Write unit tests for CLI subcommand argument handling": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064099
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920027362
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920301702
+      }
+    ],
+    "12.1 Add manifest flags to the `translate` command in `cli.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064126
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920028152
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920300820
+      }
+    ],
+    "12.2 Add additive hooks to `RepoTranslator` in `core.py`": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064152
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920028992
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920300182
+      }
+    ],
+    "12.3 Write integration test for the full five-stage run and fallback": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064177
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920307630
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920783100
+      }
+    ],
+    "12.4 Write regression test that default RepoTranslator behavior is unchanged": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064202
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920308530
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920783602
+      }
+    ],
+    "13.1 Update `pyproject.toml`: add `tree-sitter` + `tree-sitter-language-pack` as DEFAULT runtime dependencies and `hypothesis` as a dev dependency": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064232
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920029981
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920299185
+      }
+    ],
+    "14. Final checkpoint - ensure all tests pass": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917064257
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920810170
+      }
+    ],
+    "1. Establish the Segment data model and its ID/key helpers": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917636318
+      }
+    ],
+    "2. Implement manifest serialization and translation memory": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784917830072
+      }
+    ],
+    "4. Implement the hash-guarded, descending-order applicator": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918081126
+      }
+    ],
+    "6.7b Create `extractors/regex_fallback.py` — explicit fallback extractor": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918577475
+      },
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918866773
+      }
+    ],
+    "9. Implement the AUDIT stage": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784918865899
+      }
+    ],
+    "8. Implement the TRANSLATE-MANIFEST stage": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920019789
+      }
+    ],
+    "13. Declare default and dev dependencies": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920299270
+      }
+    ],
+    "11. Wire new CLI subcommands and VERIFY reuse": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920301735
+      }
+    ],
+    "12. Integrate manifest flags into the existing translate command and RepoTranslator": [
+      {
+        "executionId": "85d4edfe-645a-4be2-810a-59c2eec9d092",
+        "chatSessionId": "sess_c9bbdc55-4823-4dd6-8159-f4cdb80f5070",
+        "timestamp": 1784920783635
+      }
+    ]
+  }
+}

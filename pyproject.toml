@@ -22,7 +22,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "black==25.11.0", "ruff"]
+tree-sitter = ["tree-sitter>=0.21", "tree-sitter-language-pack>=0.0.4"]
+dev = ["pytest", "pytest-cov", "black==25.11.0", "ruff", "hypothesis", "tree-sitter>=0.21", "tree-sitter-language-pack>=0.0.4"]
 
 [project.scripts]
 repo-translator = "repo_translator.cli:main"

@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/applicator.py
+# hypothesis_version: 6.141.1
+
+['.json', '.py', '.tmp', '.toml', '.yaml', '.yml', 'exec', 'utf-8', 'w']

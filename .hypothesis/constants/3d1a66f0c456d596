@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/extractors/base.py
+# hypothesis_version: 6.141.1
+
+['.c', '.cpp', '.go', '.h', '.java', '.js', '.jsx', '.kt', '.mjs', '.py', '.rs', '.ts', '.tsx', '.vue', 'overlapping range', 'utf-8']

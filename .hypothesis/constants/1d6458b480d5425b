@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/extractors/structured_data.py
+# hypothesis_version: 6.141.1
+
+[b'"', b"'", '.json', '.toml', '.yaml', '.yml', '/', '://', '\\', '^[A-Za-z0-9_.\\-]+$', 'replace', 'utf-8']

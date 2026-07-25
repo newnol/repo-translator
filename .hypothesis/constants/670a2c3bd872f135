@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/extractors/markup.py
+# hypothesis_version: 6.141.1
+
+['#', '(^#|url\\(#)', '.htm', '.html', '.svg', '.xml', 'alt', 'aria-label', 'href', 'placeholder', 'script', 'style', 'title', 'utf-8', '{', '}']

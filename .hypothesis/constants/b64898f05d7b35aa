@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/translators/deepl.py
+# hypothesis_version: 6.141.1
+
+[0.1, 0.5, 50000, '0', '1', ':fx', 'AR', 'DE', 'DEEPL_API_KEY', 'DeepL', 'EN', 'ES', 'FR', 'IT', 'JA', 'KO', 'NL', 'PL', 'PT', 'RU', 'ZH', 'ar', 'auth_key', 'de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'nl', 'pl', 'preserve_formatting', 'pt', 'ru', 'source_lang', 'split_sentences', 'target_lang', 'text', 'translations', 'zh']

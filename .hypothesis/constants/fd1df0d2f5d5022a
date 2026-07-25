@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/detector.py
+# hypothesis_version: 6.141.1
+
+[0.05, 0.1, 1000, 12288, 12351, 12352, 12447, 12448, 12543, 13312, 19903, 19968, 40959, 44032, 55215, 63744, 64255, 65280, 65519, 131072, 173791, '"""', '"([^"]+)"', '#', '# ', '#!', '\'"', "'''", '* ', '*/', '*/ ', '-', '.htm', '.html', '.jinja2', '.json', '.jsx', '.markdown', '.md', '.qml', '.rst', '.tsx', '.ui', '.vue', '.xml', '/ ', '/*', '/* ', '//', '<[^>]+>', '["\\\']{3}', '^[\'"].*[\'"]', 'ignore', 'ja', 'ko', 'utf-8', 'zh', 'zh-cn', 'zh-tw']

@@ -1,0 +1,4 @@
+# file: /Users/newnol/workspace/projects/repo-translator/repo_translator/translators/mymemory.py
+# hypothesis_version: 6.141.1
+
+[0.3, 1.0, 500, 'MyMemory', 'key', 'langpair', 'q', 'responseData', 'translatedText']
